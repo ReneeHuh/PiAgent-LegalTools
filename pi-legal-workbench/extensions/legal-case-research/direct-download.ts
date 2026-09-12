@@ -1,3 +1,4 @@
+import { processDownloadedOpinion } from "./opinion-processing.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -26,6 +27,7 @@ export interface DirectDownloadFindOptions {
 }
 
 export interface DirectDownloadSaveOptions {
+  summarize?: boolean;
   action: "download";
   selection_handle: string;
   candidate_key: string;
@@ -36,7 +38,7 @@ export type DirectDownloadOptions = DirectDownloadFindOptions | DirectDownloadSa
 export interface DirectDownloadOutcome {
   researchRuns?: SearchRunResult["researchRuns"];
   warnings?: string[];
-  status: "results" | "completed" | "download_failed";
+  status: "results" | "completed" | "download_failed" | "partial_failure";
   html?: string;
   candidates?: NormalizedCase[];
   providers?: SearchRunResult["providers"];
@@ -306,7 +308,12 @@ async function downloadLink(
     throw error;
   }
   delete selection.claimedAt;
+  if (downloaded.status === "downloaded") selection.usedAt = nowIso();
+  writeJsonAtomic(path, selection);
+  await processDownloadedOpinion(downloaded, options.summarize ?? false, signal, onUpdate, ctx);
   const warnings: string[] = [];
+  if (downloaded.saved?.markdownError) warnings.push(`Markdown conversion failed: ${downloaded.saved.markdownError}`);
+  if (downloaded.saved?.summary?.status === "failed") warnings.push(`Summary failed: ${downloaded.saved.summary.error}`);
   for (const run of selection.researchRuns ?? []) {
     if (run.provider !== provider) continue;
     try { recordSearchDownload(readSearchRun(ctx.cwd, run.runId), downloaded.case.canonicalKey, downloaded); }
@@ -315,7 +322,8 @@ async function downloadLink(
   if (downloaded.status === "downloaded") selection.usedAt = nowIso();
   writeJsonAtomic(path, selection);
   return {
-    status: downloaded.status === "downloaded" ? "completed" : "download_failed",
+    status: downloaded.status !== "downloaded" ? "download_failed"
+      : downloaded.saved?.markdownError || (options.summarize && downloaded.saved?.summary?.status === "failed") ? "partial_failure" : "completed",
     link,
     selectionHandle: selection.selectionHandle,
     candidateKey,
@@ -338,7 +346,8 @@ export async function runDirectDownload(
     return searchForLinks(options, signal, onUpdate, ctx);
   }
   if (options.action === "download") {
-    rejectUnexpectedOptions(options, ["action", "selection_handle", "candidate_key"], "download");
+    rejectUnexpectedOptions(options, ["action", "selection_handle", "candidate_key", "summarize"], "download");
+    if (options.summarize !== undefined && typeof options.summarize !== "boolean") throw new Error("summarize must be a boolean.");
     return downloadLink(options, signal, onUpdate, ctx, download);
   }
   throw new Error('action must be "find" or "download".');
@@ -347,8 +356,8 @@ export async function runDirectDownload(
 export function directDownloadOutcomeText(outcome: DirectDownloadOutcome): string {
   if (outcome.status === "results") return outcome.html ?? "<!doctype html><html><body><p>No results found.</p></body></html>";
   const warnings = (outcome.warnings ?? []).map(warning => `\nWarning: ${warning}`).join("");
-  if (outcome.status === "completed") {
-    return `Downloaded ${outcome.download?.case.title} using ${outcome.candidateKey} from selection ${outcome.selectionHandle} to ${outcome.download?.saved?.savedPath}.\ncase_key for legal_cited_by: ${outcome.case_key}.${warnings}`;
+  if (outcome.status === "completed" || outcome.status === "partial_failure") {
+    return `Downloaded ${outcome.download?.case.title} using ${outcome.candidateKey} from selection ${outcome.selectionHandle} to ${outcome.download?.saved?.savedPath}.\nMarkdown: ${outcome.download?.saved?.markdownPath ?? "unavailable"}.\nSummary: ${outcome.download?.saved?.summary?.path ?? "not saved"}.\ncase_key for legal_cited_by: ${outcome.case_key}.${warnings}`;
   }
   return `The selected candidate could not be downloaded: ${outcome.download?.error}${warnings}`;
 }

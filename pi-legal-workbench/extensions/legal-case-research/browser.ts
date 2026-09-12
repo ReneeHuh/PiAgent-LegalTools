@@ -497,7 +497,7 @@ export interface ChallengeMessages {
 export class ProviderBrowser {
   readonly config: ProviderBrowserConfig;
   timingMode: TimingMode = "fast";
-  private lastRequestAt = 0;
+  private lastRequestAt: number | undefined;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly tabLeases = new Map<string, number>();
   private readonly navigationSessions = new Map<string, NavigationSession>();
@@ -520,25 +520,39 @@ export class ProviderBrowser {
     return switched;
   }
 
-  async pauseBeforeNavigation(signal?: AbortSignal): Promise<void> {
-    if (this.lastRequestAt) {
-      const timing = this.currentTiming();
-      await randomPause(timing.requestGapMinimumMs, timing.requestGapJitterMs, signal);
-    }
+  private async pauseForRequestGap(minimumMs: number, jitterMs: number, signal?: AbortSignal): Promise<void> {
+    // Processing (including a case summary) already provides spacing between
+    // provider actions. Cautious mode deliberately retains its full pause.
+    const elapsed = this.timingMode === "fast" && this.lastRequestAt !== undefined
+      ? Math.max(0, performance.now() - this.lastRequestAt)
+      : 0;
+    const remaining = Math.max(0, minimumMs + Math.random() * jitterMs - elapsed);
     throwIfAborted(signal);
-    this.lastRequestAt = Date.now();
+    if (remaining > 0) await abortableDelay(remaining, signal);
+    throwIfAborted(signal);
+    this.lastRequestAt = performance.now();
+  }
+
+  async pauseBeforeNavigation(signal?: AbortSignal): Promise<void> {
+    if (this.lastRequestAt !== undefined) {
+      const timing = this.currentTiming();
+      await this.pauseForRequestGap(timing.requestGapMinimumMs, timing.requestGapJitterMs, signal);
+    } else {
+      throwIfAborted(signal);
+      this.lastRequestAt = performance.now();
+    }
   }
 
   async pauseBeforeClick(signal?: AbortSignal): Promise<void> {
     const timing = this.currentTiming();
-    await randomPause(timing.resultClickMinimumMs, timing.resultClickJitterMs, signal);
-    throwIfAborted(signal);
-    this.lastRequestAt = Date.now();
+    await this.pauseForRequestGap(timing.resultClickMinimumMs, timing.resultClickJitterMs, signal);
   }
 
   async pauseBeforeBack(signal?: AbortSignal): Promise<void> {
     const timing = this.currentTiming();
     await randomPause(timing.backMinimumMs, timing.backJitterMs, signal);
+    throwIfAborted(signal);
+    this.lastRequestAt = performance.now();
   }
 
   async pauseForOpinionDwell(signal?: AbortSignal): Promise<void> {

@@ -33,7 +33,7 @@ Case discovery and acquisition are provided by the bundled [Legal Case Research 
 
 See [research usage and storage](extensions/legal-case-research/USAGE.md) for dated history, refresh, preserved source versions, and local library search.
 
-It saves opinions as `Cases/<slug>-<provider-id>.html` with a same-name Markdown metadata sidecar and returns a `case_key` for each successful download. The analysis tools consume those files and keys. Install only this workbench package for the combined search and analysis tools; the parent workspace's `.pi/settings.json` already does so. Loading the standalone CaseLawSearch package alongside it would register the same five search tools twice.
+It saves opinions as `Cases/<slug>-<provider-id>.html` with a same-name Markdown opinion containing YAML metadata frontmatter and returns a `case_key` for each successful download. Setting `summarize: true` directly invokes the summarizer after each opinion to save `<case>.Summary.md`; both extensions emit progress updates. The analysis tools consume those files and keys. Install only this workbench package for the combined search and analysis tools; the parent workspace's `.pi/settings.json` already does so. Loading the standalone CaseLawSearch package alongside it would register the same five search tools twice.
 
 ## Develop
 
@@ -87,7 +87,7 @@ case_chat(cases, question, focus?, output_path?)
 verify_document_authorities(document_path, checks?, matter_id?, case_sources?, source_roots?, output_path?)
 ```
 
-`summarize_case` reads the exact local opinion supplied in `source_path`, runs three blind independent analyses, one combined accuracy and completeness audit, and one fresh final reconstruction. It verifies source-block references and exact quotations and always reports subsequent treatment as `not_checked`.
+`summarize_case` reads the exact local opinion supplied in `source_path`, automatically saves `<source-name>.Summary.md` beside it (numbered if already present, or overridden by `output_path`), runs three blind independent analyses sequentially, one combined accuracy and completeness audit, and one fresh final reconstruction. It verifies source-block references and exact quotations and always reports subsequent treatment as `not_checked`.
 
 With LM Studio, the summarizer automatically requests strict JSON-schema output through Chat Completions for all five stages, using the selected model. The summary you receive is still readable Markdown. Other providers retain prompted-JSON behavior. Invalid JSON, incorrect response structure, unknown source references, empty text, or a token-limited response trigger one retry of the affected stage while successful analyses are retained. At most ten calls are made. Retry progress, request format, API, and actual call records are reported; a repeated failure identifies the internal model and stage instead of suggesting that the opinion path is malformed. See the [summarizer guide](extensions/case-summarizer/README.md).
 

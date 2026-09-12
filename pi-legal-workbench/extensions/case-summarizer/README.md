@@ -1,8 +1,10 @@
 # Case Summarizer
 
-`summarize_case` analyzes one saved opinion using the active Pi model. Supply `source_path` and optionally `metadata_path`, `case_key`, `audience`, `focus`, and a new `.md` or `.json` `output_path`. Sources must be `.html`, `.htm`, `.md`, or `.txt` files inside Pi's working directory. A same-name Markdown metadata sidecar is detected for HTML opinions. PDF input is not supported directly.
+`summarize_case` analyzes one saved opinion using the active Pi model. Supply `source_path` and optionally `metadata_path`, `case_key`, `audience`, `focus`, and a new `.md` or `.json` `output_path` to override automatic saving. Sources must be `.html`, `.htm`, `.md`, or `.txt` files inside Pi's working directory. For HTML, metadata is read from the same-name Markdown frontmatter or a legacy fenced-JSON sidecar. For Markdown opinions, frontmatter is parsed separately and excluded from opinion evidence. PDF input is not supported directly.
 
-The normal pipeline makes five calls: three independent candidate analyses, one combined audit, and one final reconstruction. Each initial candidate uses an isolated prompt. The audit and final writer receive the source and earlier work. Source references are internal block IDs, not reporter page citations. Treatment is always `not_checked`.
+The normal pipeline makes five calls: three independent candidate analyses run one at a time, followed by one combined audit and one final reconstruction. Each initial candidate uses an isolated prompt. The audit and final writer receive the source and earlier work. Source references are internal block IDs, not reporter page citations. Treatment is always `not_checked`.
+
+The stages and their retries share a per-run session ID and request short cache retention. Each prompt starts with the same opinion/request prefix and common system instructions, followed by stage-specific instructions. Candidate prompts never contain earlier candidate answers. Cache reuse and savings depend on the provider, model, and schema; the tool does not guarantee a cache hit. Other analysis tools retain their existing cache settings.
 
 ## Schema-enforced output with LM Studio
 
@@ -24,8 +26,12 @@ There are five calls on the normal path and at most ten when every stage retries
 
 For errors such as `executive_summary[0] must be an object` or `candidate 1 returned invalid JSON`, changing `source_path` or removing `focus` does not address the cause. These errors describe generated output, not the caller's arguments. Report exhausted recovery rather than repeatedly calling the same failing pipeline or silently substituting `case_chat` for the requested audited summary.
 
+## Search integration and progress
+
+Research tools can call this pipeline directly with `summarize: true`, awaiting all stages before the next opinion. Search forwards the model-stage updates alongside acquisition/conversion updates. Standalone `summarize_case` emits lifecycle start/completion/failure/cancellation updates and detailed reading, analysis 1/2/3, retry, audit, reconstruction, and saving updates through Pi's callback. The existing executive summary and detailed sections are saved together.
+
 ## Output
 
-The tool returns Markdown and structured details. Supplying `output_path` additionally saves Markdown or the structured summary JSON without overwriting existing files; its parent directory must exist. Markdown includes source hashes. The returned details also include the audit and model-call records, which the current JSON file export does not include. A file-saving error currently propagates to the caller.
+The tool reads the supplied opinion, saves `<source-name>.Summary.md` beside it, and returns Markdown plus structured details including the actual `outputPath`. For example, `Cases/example.html` or `Cases/example.md` produces `Cases/example.Summary.md`. Existing summaries are preserved: another run saves `example.Summary.2.md`, then `.3.md`, and so on. An explicit `output_path` overrides the default and supports Markdown or structured summary JSON; its parent directory must exist and an existing explicit path is rejected. The tool performs the file write itself; no separate agent save step is needed. Markdown includes source hashes. The returned details also include the audit and model-call records, which the current JSON file export does not include. A file-saving error currently propagates to the caller.
 
 The model audit evaluates legal support and attribution. Programmatic checks establish block-ID validity and compare normalized quote text; they do not establish treatment or good-law status. The current quotation matcher can join nonadjacent selected blocks and still requires correction before its matches can be treated as proof of contiguous quotations.

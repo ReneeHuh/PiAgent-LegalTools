@@ -1,3 +1,4 @@
+import registerSummarizer from "./index.ts";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,18 +20,19 @@ const summary = () => {
 };
 const audit = { disagreements: [], findings: [], required_corrections: [] };
 type Response = { text: string; stopReason?: string };
-type Invocation = { stage: string; attempt: number; prompt: string; maxTokens: number; api: string; payload: any };
+type Invocation = { stage: string; attempt: number; prompt: string; maxTokens: number; api: string; payload: any; systemPrompt: string; sessionId?: string; cacheRetention?: string };
 
 function fakeContext(cwd: string, respond: (call: Invocation) => Response | Promise<Response>) {
   const invocations: Invocation[] = [];
   const ctx = { cwd, model: { provider: "fixture", id: "model", api: "openai-responses", contextWindow: 200_000, maxTokens: 9_000 },
     modelRegistry: { hasConfiguredAuth: () => true,
       complete: async (model: { api: string }, context: { systemPrompt: string; messages: Array<{ content: Array<{ text: string }> }> },
-        options: { maxTokens: number; onPayload?: (payload: unknown) => unknown | Promise<unknown> }) => {
+        options: { maxTokens: number; sessionId?: string; cacheRetention?: string; onPayload?: (payload: unknown) => unknown | Promise<unknown> }) => {
         const prompt = context.messages[0].content[0].text;
-        const stage = prompt.match(/Candidate role: ([^\n]+)/)?.[1] ?? (context.systemPrompt.includes("fourth-call auditor") ? "audit" : "final");
+        const stage = prompt.match(/Candidate role: ([^\n]+)/)?.[1] ?? (prompt.includes("fourth-call auditor") ? "audit" : "final");
         const payload = { messages: context.messages, max_tokens: options.maxTokens };
         const call = { stage, attempt: invocations.filter(item => item.stage === stage).length + 1, prompt, maxTokens: options.maxTokens,
+          systemPrompt: context.systemPrompt, sessionId: options.sessionId, cacheRetention: options.cacheRetention,
           api: model.api, payload: options.onPayload ? await options.onPayload(payload) : payload };
         invocations.push(call);
         const response = await respond(call);
@@ -242,3 +244,111 @@ test("transport failures are not mistaken for invalid JSON and are not automatic
   }), /Provider connection unavailable/);
   assert.equal(invocations.length, 1);
 });
+
+
+test("summary stages run serially with a shared prefix and isolated candidate inputs", () => fixture(async root => {
+  let active = 0;
+  let peak = 0;
+  const { ctx, invocations } = fakeContext(root, async call => {
+    active++;
+    peak = Math.max(peak, active);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    active--;
+    if (call.stage === "audit") return valid(call);
+    const value = summary();
+    value.case_identity.name = "PRIVATE_CANDIDATE_" + call.stage;
+    return { text: JSON.stringify(value) };
+  });
+  await runCaseSummarizer({ source_path: "opinion.txt" }, undefined, undefined, ctx);
+  assert.equal(peak, 1);
+  assert.deepEqual(invocations.map(call => call.stage), ["legal-structure", "facts-and-procedure", "skeptical-analysis", "audit", "final"]);
+  const prefix = invocations[0].prompt.split("\n").slice(0, 2).join("\n");
+  assert.ok(prefix.startsWith("SOURCE_JSON="));
+  assert.ok(prefix.includes(sourceText.trim()));
+  for (const call of invocations) {
+    assert.ok(call.prompt.startsWith(prefix));
+    assert.equal(call.systemPrompt, invocations[0].systemPrompt);
+    assert.equal(call.cacheRetention, "short");
+    assert.ok(call.sessionId);
+    assert.equal(call.sessionId, invocations[0].sessionId);
+  }
+  for (const call of invocations.slice(0, 3)) assert.doesNotMatch(call.prompt, /PRIVATE_CANDIDATE_|CANDIDATES_JSON=|AUDIT_JSON=/);
+  assert.match(invocations[3].prompt, /PRIVATE_CANDIDATE_legal-structure/);
+  await runCaseSummarizer({ source_path: "opinion.txt" }, undefined, undefined, ctx);
+  assert.notEqual(invocations[5].sessionId, invocations[0].sessionId);
+}));
+
+test("exhausted candidate recovery prevents subsequent analyses from starting", () => fixture(async root => {
+  const { ctx, invocations } = fakeContext(root, call => call.stage === "facts-and-procedure" ? { text: "invalid" } : valid(call));
+  await assert.rejects(() => runCaseSummarizer({ source_path: "opinion.txt" }, undefined, undefined, ctx), SummaryResponseError);
+  assert.deepEqual(invocations.map(call => call.stage), ["legal-structure", "facts-and-procedure", "facts-and-procedure"]);
+  assert.equal(new Set(invocations.map(call => call.sessionId)).size, 1);
+  assert.ok(invocations.every(call => call.cacheRetention === "short"));
+}));
+
+test("cancellation after an analysis prevents the next stage and output save", () => fixture(async root => {
+  const controller = new AbortController();
+  const { ctx, invocations } = fakeContext(root, call => {
+    controller.abort(new Error("Stop summary"));
+    return valid(call);
+  });
+  await assert.rejects(() => runCaseSummarizer({ source_path: "opinion.txt", output_path: "brief.md" }, controller.signal, undefined, ctx), /Stop summary/);
+  assert.equal(invocations.length, 1);
+  assert.equal(existsSync(join(root, "brief.md")), false);
+}));
+
+test("other model-runner callers keep caching disabled by default", async () => {
+  const { ctx, invocations } = fakeContext(".", valid);
+  for (let i = 0; i < 2; i++) await runModelCall(ctx, "other", { systemPrompt: "", userPrompt: "" }, 500);
+  assert.ok(invocations.every(call => call.cacheRetention === "none"));
+  assert.notEqual(invocations[0].sessionId, invocations[1].sessionId);
+});
+
+
+for (const extension of ["html", "md"]) {
+  test(`a ${extension} opinion automatically saves a Markdown summary and preserves prior versions`, () => fixture(async root => {
+    const input = extension === "html" ? `<html><body><article><p>${sourceText}</p></article></body></html>` : sourceText;
+    const filename = `selected.case.${extension}`;
+    writeFileSync(join(root, filename), input);
+    const { ctx } = fakeContext(root, valid);
+    const first = await runCaseSummarizer({ source_path: filename }, undefined, undefined, ctx);
+    const expected = join(root, "selected.case.Summary.md");
+    assert.equal(first.details.outputPath, expected);
+    assert.equal(readFileSync(expected, "utf8"), first.markdown);
+    assert.match(first.markdown, /Executive summary/);
+    assert.match(first.markdown, /Reasoning/);
+    const second = await runCaseSummarizer({ source_path: filename }, undefined, undefined, ctx);
+    assert.equal(second.details.outputPath, join(root, "selected.case.Summary.2.md"));
+    assert.equal(readFileSync(expected, "utf8"), first.markdown);
+    assert.equal(readFileSync(second.details.outputPath, "utf8"), second.markdown);
+    assert.equal(readFileSync(join(root, filename), "utf8"), input);
+  }));
+}
+
+test("explicit summary output paths retain JSON support and never overwrite existing work", () => fixture(async root => {
+  const { ctx } = fakeContext(root, valid);
+  const first = await runCaseSummarizer({ source_path: "opinion.txt", output_path: "custom.json" }, undefined, undefined, ctx);
+  assert.deepEqual(JSON.parse(readFileSync(first.details.outputPath, "utf8")), first.details.summary);
+  const saved = readFileSync(first.details.outputPath, "utf8");
+  await assert.rejects(() => runCaseSummarizer({ source_path: "opinion.txt", output_path: "custom.json" }, undefined, undefined, ctx), { code: "EEXIST" });
+  assert.equal(readFileSync(first.details.outputPath, "utf8"), saved);
+  assert.equal(existsSync(join(root, "opinion.Summary.md")), false);
+}));
+
+
+test("registered summarizer emits Pi lifecycle and stage updates", () => fixture(async root => {
+  const tools: any[] = [];
+  registerSummarizer({ registerTool: (tool: any) => tools.push(tool) } as never);
+  const { ctx } = fakeContext(root, valid);
+  const updates: any[] = [];
+  await tools[0].execute("summary-progress", { source_path: "opinion.txt" }, undefined,
+    (update: any) => updates.push(update.details), ctx);
+  assert.equal(updates[0].phase, "starting");
+  assert.equal(updates.at(-1).phase, "completed");
+  assert.ok(updates.every(u => u.tool === "summarize_case" && u.toolCallId === "summary-progress"));
+  assert.equal(updates.filter(u => u.status === "analyzing").length, 3);
+  const failure: any[] = [];
+  await assert.rejects(() => tools[0].execute("summary-failed", { source_path: "missing.html" }, undefined,
+    (update: any) => failure.push(update.details), ctx));
+  assert.equal(failure.at(-1).status, "failed");
+}));

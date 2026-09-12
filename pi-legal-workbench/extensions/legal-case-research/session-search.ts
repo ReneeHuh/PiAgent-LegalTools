@@ -1,3 +1,4 @@
+import { processDownloadedOpinion } from "./opinion-processing.ts";
 import { join } from "node:path";
 import type { AgentToolUpdateCallback, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -27,6 +28,7 @@ export const MAX_SEARCH_PAGE = 50;
 export const MAX_CASES_TO_DOWNLOAD = MAX_SEARCH_PAGE * PROVIDER_PAGE_SIZE;
 
 export interface LegalSearchOptions {
+  summarize?: boolean;
   run_id?: string;
   refresh_of?: string;
   search_term: string;
@@ -68,6 +70,9 @@ export interface ParsedLegalSearchResult {
   opinion_url?: string;
   download_status: LegalSearchDownloadStatus;
   saved_html_path?: string;
+  saved_md_path?: string;
+  conversion_error?: string;
+  summary?: import("./providers.ts").SavedOpinion["summary"];
   download_error?: string;
 }
 
@@ -104,6 +109,7 @@ export interface LegalSearchOutcome {
 }
 
 export interface ValidatedLegalSearchRequest {
+  summarize?: boolean;
   searchTerm: string;
   provider: DiscoveryProviderId;
   jurisdiction: UniformJurisdiction;
@@ -158,7 +164,7 @@ function emit(
 
 function rejectUnexpectedOptions(options: object): void {
   const allowed = [
-    "run_id", "refresh_of",
+    "run_id", "refresh_of", "summarize",
     "search_term",
     "provider",
     "jurisdiction",
@@ -175,6 +181,7 @@ function rejectUnexpectedOptions(options: object): void {
 
 export function validateLegalSearchOptions(options: LegalSearchOptions): ValidatedLegalSearchRequest {
   rejectUnexpectedOptions(options);
+  if (options.summarize !== undefined && typeof options.summarize !== "boolean") throw new Error("summarize must be a boolean.");
   const searchTerm = options.search_term?.trim();
   if (!searchTerm) throw new Error("search_term is required.");
   if (!SEARCH_PROVIDERS.includes(options.provider)) {
@@ -223,6 +230,7 @@ export function validateLegalSearchOptions(options: LegalSearchOptions): Validat
   }
   return {
     searchTerm,
+    summarize: options.summarize,
     provider: options.provider,
     jurisdiction,
     pagesToSearch,
@@ -318,6 +326,9 @@ function publicResults(
       download_status: downloadStatus,
       saved_html_path: download?.saved?.savedPath ?? existingPath,
       download_error: download?.error,
+      saved_md_path: download?.saved?.markdownPath,
+      conversion_error: download?.saved?.markdownError,
+      summary: download?.saved?.summary,
     };
   });
 }
@@ -331,6 +342,7 @@ export async function runLegalSearch(
 ): Promise<LegalSearchOutcome> {
   const prior = options.run_id ? readSearchRun(ctx.cwd, options.run_id) : undefined;
   const effective = prior ? { ...options,
+    summarize: options.summarize ?? prior.manifest.request.summarize,
     resume_page: options.resume_page ?? prior.manifest.resumePage ?? prior.manifest.request.startPage,
     pages_to_search: options.pages_to_search ?? (prior.manifest.pagesRemaining || prior.manifest.request.pagesToSearch),
     max_cases_to_download: options.max_cases_to_download ?? prior.manifest.request.maxCasesToDownload,
@@ -339,6 +351,7 @@ export async function runLegalSearch(
   // Validate provider-specific court and date translation before opening a browser.
   legalSearchPageParameters(request, request.startPage);
   const run = startSearchRun(ctx.cwd, request, options.run_id, options.refresh_of);
+  run.manifest.request.summarize = request.summarize;
   const priorPages = latestSearchPages(run);
   const warnings: string[] = [];
 
@@ -351,18 +364,33 @@ export async function runLegalSearch(
   const downloads = new Map<string, DownloadedCase>();
   const existingPaths = new Map<string, string>();
   const root = join(ctx.cwd, "Cases");
-  for (const [key, download] of Object.entries(run.manifest.downloads)) {
-    if (download.status === "downloaded" && checkOpinionIntegrity(download.saved, root).status === "valid") {
-      existingPaths.set(key, download.saved!.savedPath);
-      selectedKeys.add(key);
-    }
-  }
   let providerExhausted = false;
   let stopReason: string | undefined;
   let resumePage: number | undefined;
   let stoppedDuringDownload = false;
+  const priorSelected = mergeCases(pageResults.map(row => row.case), request.provider)
+    .slice(0, request.maxCasesToDownload === -1 ? undefined : request.maxCasesToDownload);
+  for (const item of priorSelected) {
+    const key = item.canonicalKey;
+    const download = run.manifest.downloads[key];
+    if (download?.status !== "downloaded" || checkOpinionIntegrity(download.saved, root).status !== "valid") continue;
+    existingPaths.set(key, download.saved!.savedPath);
+    selectedKeys.add(key);
+    downloads.set(key, { case: item, status: "downloaded", saved: download.saved });
+  }
+  for (const [key, reused] of downloads) {
+    if (signal?.aborted || runtime.now() >= deadline) {
+      stopReason = signal?.aborted ? "Operation cancelled before processing saved opinions." : "Runtime limit reached before processing saved opinions.";
+      resumePage = request.startPage;
+      stoppedDuringDownload = true;
+      break;
+    }
+    await processDownloadedOpinion(reused, request.summarize ?? false, signal, onUpdate, ctx);
+    downloads.set(key, reused);
+    recordSearchDownload(run, key, reused);
+  }
 
-  pageLoop: for (let page = request.startPage; page <= request.endPage; page += 1) {
+  pageLoop: for (let page = request.startPage; !stopReason && page <= request.endPage; page += 1) {
     if (signal?.aborted) {
       stopReason = "Operation cancelled before the next result page.";
       resumePage = page;
@@ -412,14 +440,6 @@ export async function runLegalSearch(
       for (const item of selectedSoFar) {
         if (!normalized.some(current => sameCase(current, item))) continue;
         if (selectedKeys.has(item.canonicalKey)) continue;
-        selectedKeys.add(item.canonicalKey);
-        const existing = findSavedOpinion(root, item, request.provider);
-        warnings.push(...existing.warnings);
-        if (existing.saved) {
-          existingPaths.set(item.canonicalKey, existing.saved.savedPath);
-          recordSearchDownload(run, item.canonicalKey, { status: "downloaded", saved: existing.saved });
-          continue;
-        }
         if (signal?.aborted || runtime.now() >= deadline) {
           stopReason = signal?.aborted
             ? "Operation cancelled before the next opinion download."
@@ -427,6 +447,17 @@ export async function runLegalSearch(
           resumePage = page;
           stoppedDuringDownload = true;
           break pageLoop;
+        }
+        selectedKeys.add(item.canonicalKey);
+        const existing = findSavedOpinion(root, item, request.provider);
+        warnings.push(...existing.warnings);
+        if (existing.saved) {
+          existingPaths.set(item.canonicalKey, existing.saved.savedPath);
+          const reused: DownloadedCase = { case: item, status: "downloaded", saved: existing.saved };
+          await processDownloadedOpinion(reused, request.summarize ?? false, signal, onUpdate, ctx);
+          downloads.set(item.canonicalKey, reused);
+          recordSearchDownload(run, item.canonicalKey, reused);
+          continue;
         }
         emit(onUpdate, `Clicking result ${selectedKeys.size} to download: ${item.title}`, {
           phase: "download",
@@ -446,6 +477,8 @@ export async function runLegalSearch(
             onUpdate,
           );
           downloads.set(item.canonicalKey, downloaded);
+          recordSearchDownload(run, item.canonicalKey, downloaded);
+          await processDownloadedOpinion(downloaded, request.summarize ?? false, signal, onUpdate, ctx);
           recordSearchDownload(run, item.canonicalKey, downloaded);
           if (downloaded.saved?.returnedToResults === false) {
             warnings.push(`Opinion saved; results navigation failed: ${downloaded.saved.restorationError ?? "unknown reason"}`);
@@ -482,6 +515,10 @@ export async function runLegalSearch(
     }
   }
 
+  for (const download of downloads.values()) {
+    if (download.saved?.markdownError) warnings.push(`${download.case.title}: Markdown conversion failed: ${download.saved.markdownError}`);
+    if (request.summarize && download.saved?.summary?.status === "failed") warnings.push(`${download.case.title}: Summary failed: ${download.saved.summary.error}`);
+  }
   const uniqueCases = mergeCases(pageResults.map((item) => item.case), request.provider);
   const selectedCases = request.maxCasesToDownload === -1
     ? uniqueCases
@@ -489,7 +526,7 @@ export async function runLegalSearch(
 
   const selectedCaseKeys = new Set(selectedCases.map(item => item.canonicalKey));
   const downloaded = [...downloads.values()].filter((item) => item.status === "downloaded" && selectedCaseKeys.has(item.case.canonicalKey)).length
-    + [...existingPaths.keys()].filter(key => selectedCaseKeys.has(key)).length;
+    + [...existingPaths.keys()].filter(key => selectedCaseKeys.has(key) && !downloads.has(key)).length;
   const failed = [...downloads.values()].filter((item) => item.status === "failed").length;
   const notAttempted = selectedCases.length - downloaded - failed;
   const pagesRemaining = resumePage === undefined
@@ -504,7 +541,7 @@ export async function runLegalSearch(
   const stopped = Boolean(stopReason);
   const status: LegalSearchOutcome["status"] = stopped
     ? "stopped"
-    : failed > 0
+    : failed > 0 || [...downloads.values()].some(d => d.saved?.markdownError || (request.summarize && d.saved?.summary?.status === "failed"))
       ? "partial_failure"
       : "completed";
   const phase: LegalSearchOutcome["phase"] = stopped
@@ -591,7 +628,9 @@ export function legalSearchOutcomeText(outcome: LegalSearchOutcome): string {
       : "Parsed provider results: none.",
     ...outcome.results.map((item, index) => {
       const metadata = [item.citations.join(", ") || "Citation unavailable", item.court ?? "Court unavailable", item.date_filed ?? item.year ?? "Date unavailable", `Publication status: ${item.publication_status ?? "unavailable"}`].join(" | ");
-      const saved = item.saved_html_path ? ` | saved HTML: ${item.saved_html_path}` : "";
+      const saved = [item.saved_html_path ? ` | saved HTML: ${item.saved_html_path}` : "",
+        item.saved_md_path ? ` | saved Markdown: ${item.saved_md_path}` : "",
+        item.summary?.path ? ` | summary: ${item.summary.path}` : ""].join("");
       const error = item.download_error ? ` | download error: ${item.download_error}` : "";
       const source = item.opinion_url ? `\n   Opinion: ${item.opinion_url}` : "";
       const snippet = item.snippet ? `\n   Snippet: ${item.snippet}` : "";

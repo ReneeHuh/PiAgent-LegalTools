@@ -14,6 +14,12 @@ export interface ModelCallRecord {
   usage: unknown;
 }
 
+export interface ModelCallOptions {
+  allowEmptyText?: boolean;
+  cacheRetention?: "none" | "short" | "long";
+  sessionId?: string;
+}
+
 export interface ModelCallOutput {
   text: string;
   record: ModelCallRecord;
@@ -38,7 +44,7 @@ export async function runModelCall(
   prompt: ModelPrompt,
   requestedMaxTokens: number,
   signal?: AbortSignal,
-  options: { allowEmptyText?: boolean } = {},
+  options: ModelCallOptions = {},
 ): Promise<ModelCallOutput> {
   const activeModel = ctx.model;
   if (!activeModel) throw new Error(`${stage} requires an active Pi model.`);
@@ -87,8 +93,8 @@ export async function runModelCall(
     {
       maxTokens: maxOutputTokens,
       signal,
-      cacheRetention: "none",
-      sessionId: randomUUID(),
+      cacheRetention: options.cacheRetention ?? "none",
+      sessionId: options.sessionId ?? randomUUID(),
       onPayload,
     },
   );

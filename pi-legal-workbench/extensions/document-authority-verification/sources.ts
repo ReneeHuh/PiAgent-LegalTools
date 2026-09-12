@@ -1,3 +1,5 @@
+import { isSummaryArtifact } from "../shared/opinion-markdown.ts";
+import { readOpinionMetadata } from "../shared/opinion-markdown.ts";
 import { readFile, readdir, realpath, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { loadCaseSource, type LoadedCaseSource } from "../case-summarizer/source.ts";
@@ -54,14 +56,7 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function parseMetadataText(raw: string): Record<string, unknown> | undefined {
-  const fenced = raw.match(/```json\s*([\s\S]*?)\s*```/i)?.[1];
-  if (!fenced) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(fenced);
-    return isRecord(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
+  try { return readOpinionMetadata(raw); } catch { return undefined; }
 }
 
 function metadataFields(metadata: Record<string, unknown> | undefined): MetadataFields {
@@ -167,6 +162,9 @@ async function scannedDescriptor(cwd: string, sourcePath: string): Promise<Index
   const extension = extname(sourcePath).toLowerCase();
   if (extension === ".md") {
     const raw = await readFile(sourcePath, "utf8");
+    const metadata = parseMetadataText(raw);
+    if (isSummaryArtifact(sourcePath, metadata)) return undefined;
+    if (isRecord(metadata?.source) && metadata.source.savedPath) return undefined;
     if (/## Machine-readable metadata/i.test(raw) && /```json/i.test(raw)) return undefined;
     return {
       ...identityFromLoaded(await loadCaseSource({ cwd, sourcePath })),
@@ -205,7 +203,13 @@ async function collectFiles(root: string, limit: number): Promise<{ files: strin
     for (const entry of entries) {
       const path = join(directory, entry.name);
       if (entry.isDirectory() && !SKIPPED_DIRECTORIES.has(entry.name)) queue.push(path);
-      else if (entry.isFile() && CASE_EXTENSIONS.has(extname(entry.name).toLowerCase())) files.push(path);
+      else if (entry.isFile() && CASE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+        if (isSummaryArtifact(path)) continue;
+        if (extname(path).toLowerCase() === ".md") {
+          try { if (isSummaryArtifact(path, parseMetadataText(await readFile(path, "utf8")))) continue; } catch { /* Descriptor handles invalid files. */ }
+        }
+        files.push(path);
+      }
       if (files.length >= limit) {
         truncated = queue.length > 0 || entries.at(-1)?.name !== entry.name;
         break;

@@ -78,6 +78,14 @@ function sourcePayload(source: LoadedCaseSource): Record<string, unknown> {
   };
 }
 
+function sharedPrefix(source: LoadedCaseSource, request: SummaryRequest): string {
+  return [
+    `SOURCE_JSON=${JSON.stringify(sourcePayload(source))}`,
+    `REQUEST_JSON=${JSON.stringify(requestPayload(request))}`,
+    "",
+  ].join("\n");
+}
+
 export function buildCandidatePrompt(
   role: CandidateRole,
   source: LoadedCaseSource,
@@ -87,6 +95,7 @@ export function buildCandidatePrompt(
     responseSchema: { name: "case_summary", schema: CaseSummaryResponseSchema },
     systemPrompt: COMMON_SYSTEM_PROMPT,
     userPrompt: [
+      sharedPrefix(source, request),
       `Candidate role: ${role.name}`,
       role.instructions,
       "Work independently. You have not seen and must not speculate about any other candidate analysis.",
@@ -94,8 +103,6 @@ export function buildCandidatePrompt(
       SUMMARY_FORMAT_INSTRUCTIONS,
       caseSummaryJsonShape(),
       "",
-      `REQUEST_JSON=${JSON.stringify(requestPayload(request))}`,
-      `SOURCE_JSON=${JSON.stringify(sourcePayload(source))}`,
     ].join("\n"),
   };
 }
@@ -107,12 +114,11 @@ export function buildAuditPrompt(
 ): ModelPrompt {
   return {
     responseSchema: { name: "case_summary_audit", schema: SummaryAuditResponseSchema },
-    systemPrompt: [
-      COMMON_SYSTEM_PROMPT,
+    systemPrompt: COMMON_SYSTEM_PROMPT,
+    userPrompt: [
+      sharedPrefix(source, request),
       "You are the fourth-call auditor, not the final writer and not a judge choosing a winning candidate.",
       "Compare every material candidate claim against the supplied opinion before accepting or criticizing it.",
-    ].join("\n"),
-    userPrompt: [
       "Audit the three independent candidate summaries against the source.",
       "Build a disagreement and correction map covering all four areas:",
       "1. Source and factual accuracy, including whether each block actually supports the claim.",
@@ -125,9 +131,7 @@ export function buildAuditPrompt(
       "Return JSON following this concrete format example:",
       summaryAuditJsonShape(),
       "",
-      `REQUEST_JSON=${JSON.stringify(requestPayload(request))}`,
       `CANDIDATES_JSON=${JSON.stringify(candidates)}`,
-      `SOURCE_JSON=${JSON.stringify(sourcePayload(source))}`,
     ].join("\n"),
   };
 }
@@ -140,12 +144,11 @@ export function buildFinalPrompt(
 ): ModelPrompt {
   return {
     responseSchema: { name: "case_summary", schema: CaseSummaryResponseSchema },
-    systemPrompt: [
-      COMMON_SYSTEM_PROMPT,
+    systemPrompt: COMMON_SYSTEM_PROMPT,
+    userPrompt: [
+      sharedPrefix(source, request),
       "You are the fifth-call final writer. Construct a new summary from the source; do not select or lightly edit one candidate.",
       "Treat the candidate summaries and audit as fallible working notes. Independently decide whether every proposed correction is supported.",
-    ].join("\n"),
-    userPrompt: [
       "Write the final case summary for the requested audience and focus.",
       "Reconcile substantive disagreements against the opinion itself.",
       "Apply valid audit corrections, discard unsupported candidate claims, preserve material qualifications, and avoid repetition.",
@@ -153,10 +156,8 @@ export function buildFinalPrompt(
       SUMMARY_FORMAT_INSTRUCTIONS,
       caseSummaryJsonShape(),
       "",
-      `REQUEST_JSON=${JSON.stringify(requestPayload(request))}`,
       `CANDIDATES_JSON=${JSON.stringify(candidates)}`,
       `AUDIT_JSON=${JSON.stringify(audit)}`,
-      `SOURCE_JSON=${JSON.stringify(sourcePayload(source))}`,
     ].join("\n"),
   };
 }

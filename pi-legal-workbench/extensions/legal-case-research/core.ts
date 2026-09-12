@@ -1,3 +1,5 @@
+import TurndownService from "turndown";
+import { readOpinionMetadata, renderOpinionMarkdown } from "../shared/opinion-markdown.ts";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -244,7 +246,7 @@ function elementById(html: string, ids: string[]): string | undefined {
   return undefined;
 }
 
-export function extractOpinionText(html: string, provider?: ProviderId): string {
+export function extractOpinionHtml(html: string, provider?: ProviderId): string {
   const providerIds: Record<ProviderId, string[]> = {
     courtlistener: ["opinion-content", "opinion"],
     scholar: ["gs_opinion"],
@@ -256,7 +258,7 @@ export function extractOpinionText(html: string, provider?: ProviderId): string 
       const boundary = opinion.search(/<[^>]*\bid=["'](?:gs_dont_print|gs_ftr)["'][^>]*>/i);
       if (boundary !== -1) opinion = opinion.slice(0, boundary);
       const text = stripOpinionHtml(opinion);
-      if (text) return text;
+      if (text) return opinion;
     }
   }
   if (!provider || provider === "courtlistener") {
@@ -264,17 +266,41 @@ export function extractOpinionText(html: string, provider?: ProviderId): string 
       ?? html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i);
     if (article?.[1]) {
       const text = stripOpinionHtml(article[1]);
-      if (text) return text;
+      if (text) return article[1];
     }
   }
   const candidates = provider ? providerIds[provider] : Object.values(providerIds).flat();
   const scoped = elementById(html, candidates);
-  if (scoped !== undefined) return stripOpinionHtml(scoped);
+  if (scoped !== undefined) return scoped;
   // A provider-specific request must contain a recognizable opinion element.
   // Falling back to the whole body would accept search, home, login, or block
   // pages as legal opinions merely because they contain enough text.
   if (provider) return "";
-  return stripHtml(html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html);
+  return html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html;
+}
+
+export function extractOpinionText(html: string, provider?: ProviderId): string {
+  return stripOpinionHtml(extractOpinionHtml(html, provider));
+}
+
+export function extractOpinionMarkdown(html: string, provider?: ProviderId): string {
+  const scoped = extractOpinionHtml(html, provider);
+  if (stripHtml(scoped).length < 200) throw new Error("No usable full-opinion element for Markdown conversion.");
+  const converter = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" });
+  converter.remove(["script", "style", "noscript", "nav", "form"]);
+  converter.addRule("footnoteBacklinks", {
+    filter: node => node.nodeName === "A" && /(?:^|\s)jumpback(?:\s|$)/.test(node.getAttribute("class") ?? ""),
+    replacement: () => "",
+  });
+  converter.addRule("opinionTargets", {
+    filter: node => node.nodeName === "A" && node.hasAttribute("data-opinion-target"),
+    replacement: (_content, node) => '<a id="' + (node as HTMLElement).getAttribute("data-opinion-target")!.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;") + '"></a>',
+  });
+  const withTargets = scoped.replace(/<([a-z][a-z0-9]*)\b([^>]*?\bid=["']([^"']+)["'][^>]*)>/gi,
+    (tag, _name, _attrs, id) => '<a data-opinion-target="' + id.replace(/"/g, "&quot;") + '"></a>' + tag);
+  // Preserve complex table structure as Markdown-compatible HTML.
+  converter.keep(["table"]);
+  return converter.turndown(withTargets).trim();
 }
 
 export function normalizeWhitespace(value: string): string {
@@ -721,6 +747,25 @@ export function writeMarkdownMetadata(
     source?: { provider?: string; sourceUrl?: string; savedPath?: string };
     downloadedAt?: string;
   };
+  if (record.source?.savedPath && /\.html?$/i.test(record.source.savedPath)) {
+    const source = record.source as typeof record.source & { markdownPath?: string; markdownError?: string };
+    let body = "";
+    try {
+      body = extractOpinionMarkdown(readFileSync(source.savedPath!, "utf8"), source.provider as ProviderId);
+      source.markdownPath = path;
+      delete source.markdownError;
+      value.conversion = { version: 1, status: "completed", bodySha256: createHash("sha256").update(body).digest("hex") };
+    } catch (error) {
+      source.markdownError = error instanceof Error ? error.message : String(error);
+      value.conversion = { version: 1, status: "failed", error: source.markdownError };
+    }
+    const content = renderOpinionMarkdown(value, body);
+    if (preserveExisting) {
+      try { writeFileSync(path, content, { encoding: "utf8", flag: "wx" }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    } else writeTextAtomic(path, content);
+    return;
+  }
   const item = record.case;
   const source = record.source;
   const details = [
@@ -749,9 +794,7 @@ export function writeMarkdownMetadata(
 
 export function readMarkdownMetadata<T>(path: string): T {
   const markdown = readFileSync(path, "utf8");
-  const match = markdown.match(/```json\s*([\s\S]*?)\s*```/i);
-  if (!match) throw new Error(`No machine-readable JSON metadata block exists in ${path}.`);
-  return JSON.parse(match[1]) as T;
+  return readOpinionMetadata(markdown) as T;
 }
 
 export function caseMarkdownMetadataRecords(

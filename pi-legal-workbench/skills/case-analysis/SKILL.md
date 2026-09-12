@@ -24,9 +24,9 @@ Create a durable structured case record containing identity, posture, facts, iss
 
 ### Summarize
 
-Match the requested audience and focus. Create an independent source-grounded draft, audit each material proposition against the opinion, and correct the final summary. A summary does not replace the structured case record.
+Match the requested audience and focus. Create an independent source-grounded draft, audit each material proposition against the opinion, and correct the final summary. A summary does not replace the structured case record. `summarize_case` reads the exact saved HTML or Markdown opinion and saves `<source-name>.Summary.md` beside it automatically (numbered on subsequent runs). An explicit `output_path` overrides the destination. Report its returned `outputPath`; the tool writes the file, so do not create another copy.
 
-`summarize_case` automatically requests strict JSON-schema output through Chat Completions when the selected provider is `lmstudio`, and returns readable Markdown. Other providers retain their configured API. It normally uses five model calls and retries an invalid internal response once per affected stage, for at most ten calls. If it reports exhausted model-output recovery, report the failed stage and model; do not interpret a summary-field JSON error as an invalid `source_path`, repeatedly rerun the same call, or silently substitute Case Chat for the requested summary pipeline.
+`summarize_case` automatically requests strict JSON-schema output through Chat Completions when the selected provider is `lmstudio`, and returns readable Markdown. Other providers retain their configured API. Its three independent analyses run sequentially, followed by the audit and final reconstruction. Calls share a source prefix and per-run cache session; cache reuse depends on provider support. It normally uses five model calls and retries an invalid internal response once per affected stage, for at most ten calls. If it reports exhausted model-output recovery, report the failed stage and model; do not interpret a summary-field JSON error as an invalid `source_path`, repeatedly rerun the same call, or silently substitute Case Chat for the requested summary pipeline.
 
 ### Chat
 

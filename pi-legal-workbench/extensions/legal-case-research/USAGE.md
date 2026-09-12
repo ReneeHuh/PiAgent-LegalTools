@@ -121,3 +121,11 @@ Pass these to `legal_library_search`:
 ```
 
 All whitespace-separated query terms must occur in saved metadata or valid opinion text; this is literal local search, not provider-query syntax or semantic search. Court filtering is a literal substring of saved court metadata: `Mich` matches both `Michigan` and provider abbreviations such as `Mich.`. Results include source and metadata paths, provider URL, saved hash, integrity status, matching passage, and linked ordinary searches and cited-by runs. Multiple preserved versions remain separate results. Use `offset` to page through them. Broken or unhashed versions can still match metadata, but their opinion text is not presented as checked content.
+
+## Save opinions with summaries
+
+```json
+{"search_term":"reasonable care","provider":"scholar","jurisdiction":"6th circuit","pages_to_search":1,"max_cases_to_download":5,"summarize":true}
+```
+
+Each selected opinion produces original HTML, opinion Markdown with YAML frontmatter, and a `.Summary.md` containing executive and detailed summary sections. With summarize omitted or false, only HTML and opinion Markdown are saved. The search invokes the summary pipeline directly and forwards its stage updates before proceeding to the next opinion. For exact downloads put `summarize: true` on action `download`; citing collections accept it on collect/refresh/resume. See the skill tool reference for output fields and resume behavior.

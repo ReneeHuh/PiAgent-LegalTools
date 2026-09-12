@@ -1,3 +1,4 @@
+import { splitOpinionMarkdown } from "../shared/opinion-markdown.ts";
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve } from "node:path";
@@ -87,7 +88,7 @@ export async function loadVerificationDocument(cwd: string, requestedPath: strin
     throw new Error(`The document exceeds the ${MAX_DOCUMENT_BYTES.toLocaleString()} byte input limit.`);
   }
   const raw = await readFile(documentPath, "utf8");
-  const text = extension === ".html" || extension === ".htm" ? htmlToText(raw) : raw;
+  const text = extension === ".html" || extension === ".htm" ? htmlToText(raw) : extension === ".md" ? splitOpinionMarkdown(raw).body : raw;
   const blocks = createBlocks(text);
   if (!blocks.length) throw new Error("No usable text could be extracted from document_path.");
   const normalizedText = blocks.map((block) => block.text).join("\n\n");

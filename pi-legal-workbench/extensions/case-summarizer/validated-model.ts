@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { estimateModelInputTokens, runModelCall, type ModelCallRecord } from "./model-runner.ts";
+import { estimateModelInputTokens, runModelCall, type ModelCallRecord, type ModelCallOptions } from "./model-runner.ts";
 import type { ModelPrompt } from "./prompts.ts";
 
 export interface ValidatedModelCallRecord extends ModelCallRecord {
@@ -29,6 +29,7 @@ export async function runValidatedModelCall<T>(ctx: ExtensionContext, options: {
   prompt: ModelPrompt;
   maxOutputTokens: number;
   signal?: AbortSignal;
+  cache?: Pick<ModelCallOptions, "cacheRetention" | "sessionId">;
   validate: (text: string) => T;
   onCall: (record: ValidatedModelCallRecord) => void;
   onRetry: (message: string) => void;
@@ -38,7 +39,7 @@ export async function runValidatedModelCall<T>(ctx: ExtensionContext, options: {
   for (let attempt = 1; attempt <= 2; attempt++) {
     options.signal?.throwIfAborted();
     // Transport, authentication, and context errors are not JSON errors and are not retried here.
-    const output = await runModelCall(ctx, options.stage, prompt, maxOutputTokens, options.signal, { allowEmptyText: true });
+    const output = await runModelCall(ctx, options.stage, prompt, maxOutputTokens, options.signal, { ...options.cache, allowEmptyText: true });
     options.signal?.throwIfAborted();
     const record: ValidatedModelCallRecord = { ...output.record, attempt };
     let errorMessage: string;

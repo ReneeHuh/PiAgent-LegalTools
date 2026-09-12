@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import {
   CdpCommandTimeoutError,
   ProviderBrowser,
@@ -101,4 +101,63 @@ test("a page without a human challenge returns immediately", async () => {
     { detected: "", detectedAgain: "", unsolved: "", cleared: "" },
   );
   assert.deepEqual(state, { captcha: false });
+});
+
+function timingHarness(t: TestContext) {
+  let now = 0;
+  const waits: number[] = [];
+  t.mock.method(performance, "now", () => now);
+  t.mock.method(Math, "random", () => 0.5);
+  t.mock.method(globalThis, "setTimeout", (callback: () => void, ms: number) => {
+    waits.push(ms);
+    queueMicrotask(() => { now += ms; callback(); });
+    return 1;
+  });
+  t.mock.method(globalThis, "clearTimeout", () => {});
+  return { waits, advance: (ms: number) => { now += ms; } };
+}
+
+test("normal browser gaps credit partial processing time and long summaries", async t => {
+  const clock = timingHarness(t);
+  const browser = exampleBrowser();
+  await browser.pauseBeforeNavigation();
+  clock.advance(250);
+  await browser.pauseBeforeClick();
+  assert.deepEqual(clock.waits, [500]);
+  clock.advance(30000);
+  await browser.pauseBeforeClick();
+  assert.deepEqual(clock.waits, [500], "a long summary satisfies the next click gap");
+  await browser.pauseBeforeNavigation();
+  assert.deepEqual(clock.waits, [500, 750], "credit is not carried over to another action");
+  clock.advance(30000);
+  await browser.pauseBeforeNavigation();
+  assert.deepEqual(clock.waits, [500, 750], "navigation also credits elapsed processing time");
+});
+
+test("Back and cautious timing retain full delays after processing", async t => {
+  const clock = timingHarness(t);
+  const browser = exampleBrowser();
+  await browser.pauseBeforeNavigation();
+  clock.advance(30000);
+  await browser.pauseBeforeBack();
+  await browser.pauseBeforeClick();
+  assert.deepEqual(clock.waits, [750, 750], "Back resets the most recent action timestamp");
+  browser.enableCautiousTiming();
+  clock.advance(30000);
+  await browser.pauseBeforeClick();
+  clock.advance(30000);
+  await browser.pauseBeforeNavigation();
+  assert.deepEqual(clock.waits, [750, 750, 2250, 2250]);
+});
+
+test("credited browser gaps still honor cancellation", async t => {
+  const clock = timingHarness(t);
+  const browser = exampleBrowser();
+  await browser.pauseBeforeNavigation();
+  clock.advance(30000);
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(browser.pauseBeforeClick(controller.signal), { name: "AbortError" });
+  await assert.rejects(browser.pauseBeforeNavigation(controller.signal), { name: "AbortError" });
+  assert.deepEqual(clock.waits, []);
 });

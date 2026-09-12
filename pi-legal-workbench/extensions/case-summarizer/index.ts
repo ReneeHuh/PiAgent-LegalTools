@@ -1,3 +1,4 @@
+import { runWithToolStatus } from "../legal-case-research/tool-status.ts";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
 import { runCaseSummarizer, type CaseSummarizerToolDetails } from "./summarize.ts";
@@ -31,7 +32,7 @@ const CaseSummarizerSchema = Type.Object({
   output_path: Type.Optional(Type.String({
     minLength: 1,
     maxLength: 4_096,
-    description: "Optional new .md or .json path for the validated final summary. Existing files are never overwritten.",
+    description: "Optional new .md or .json output path. By default, saves <source-name>.Summary.md beside the opinion, adding a numbered suffix if needed. Existing files are never overwritten.",
   })),
 }, {
   additionalProperties: false,
@@ -46,7 +47,7 @@ export default function caseSummarizerExtension(pi: ExtensionAPI): void {
     executionMode: "sequential",
     label: "Case Summarizer",
     description:
-      "Summarize one saved judicial opinion from an exact local file path. Runs three blind independent analyses, " +
+      "Read one saved judicial opinion and automatically save its summary beside the source as <source-name>.Summary.md. Runs three blind independent analyses sequentially, " +
       "one combined source/quote/attribution/completeness/holding/reasoning audit, and one fresh final reconstruction. " +
       "LM Studio calls automatically use strict JSON-schema output through Chat Completions; the user receives readable Markdown. " +
       "Invalid internal JSON or source references trigger one retry of that stage. The tool verifies source-block references and exact quotations but does not check subsequent treatment or good-law status.",
@@ -54,18 +55,23 @@ export default function caseSummarizerExtension(pi: ExtensionAPI): void {
     promptGuidelines: [
       "Use summarize_case only after the user or Central Case Library skill identifies the exact saved opinion file.",
       "Pass summarize_case.source_path as the opinion file, not its metadata sidecar, a search result, a snippet, or a URL.",
+      "summarize_case saves the summary itself and returns details.outputPath. Omit output_path for automatic Markdown output; repeat runs preserve earlier summaries with numbered filenames. Report the returned saved path rather than writing another copy.",
       "summarize_case automatically requests schema-enforced JSON for LM Studio; its modelCalls records identify the API and responseFormat used. Do not change the user's global model settings to enable this.",
-      "summarize_case normally performs five model calls, with at most ten if every stage needs its one response-validation retry; use it for a full case brief rather than a quick passage lookup.",
+      "summarize_case runs one model call at a time with a shared source prefix and per-run cache session; it normally performs five model calls, with at most ten if every stage needs its one response-validation retry; use it for a full case brief rather than a quick passage lookup.",
       "If summarize_case reports an internal model-response failure after retry, report the failed stage. Do not blame source_path, repeatedly rerun the same call, or silently replace the requested summary with case_chat.",
       "Treat summarize_case output as treatment_status=not_checked unless a separate treatment workflow was completed.",
     ],
     parameters: CaseSummarizerSchema,
-    async execute(_toolCallId, params: CaseSummarizerParams, signal, onUpdate, ctx) {
-      const result = await runCaseSummarizer(params, signal, onUpdate, ctx);
-      return {
-        content: [{ type: "text", text: result.markdown }],
-        details: result.details,
-      };
+    async execute(toolCallId, params: CaseSummarizerParams, signal, onUpdate, ctx) {
+      return runWithToolStatus({ tool: "summarize_case", toolCallId, signal, onUpdate,
+        operation: async progress => {
+          const result = await runCaseSummarizer(params, signal, progress, ctx);
+          return {
+            content: [{ type: "text" as const, text: `Saved summary: ${result.details.outputPath}\n\n${result.markdown}` }],
+            details: result.details,
+          };
+        },
+      });
     },
   });
 }

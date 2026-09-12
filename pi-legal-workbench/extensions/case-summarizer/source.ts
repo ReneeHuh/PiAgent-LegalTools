@@ -1,3 +1,4 @@
+import { isSummaryArtifact, readOpinionMetadata, splitOpinionMarkdown } from "../shared/opinion-markdown.ts";
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve } from "node:path";
@@ -37,7 +38,7 @@ function isInside(basePath: string, candidatePath: string): boolean {
   return value === "" || (!value.startsWith("..") && !isAbsolute(value));
 }
 
-async function resolveReadableFile(cwd: string, requestedPath: string, label: string): Promise<string> {
+export async function resolveReadableFile(cwd: string, requestedPath: string, label: string): Promise<string> {
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(requestedPath)) {
     throw new Error(`${label} must be a local file path, not a URL.`);
   }
@@ -158,13 +159,7 @@ function extractOpinionText(html: string, provider?: string): string {
 }
 
 function parseMetadata(markdown: string): Record<string, unknown> {
-  const match = markdown.match(/```json\s*([\s\S]*?)\s*```/i);
-  if (!match) throw new Error("The metadata file has no machine-readable JSON block.");
-  const parsed: unknown = JSON.parse(match[1]);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error("The metadata JSON must be an object.");
-  }
-  return parsed as Record<string, unknown>;
+  return readOpinionMetadata(markdown);
 }
 
 function metadataProvider(metadata: Record<string, unknown> | undefined): string | undefined {
@@ -239,14 +234,18 @@ export async function loadCaseSource(options: LoadCaseSourceOptions): Promise<Lo
   }
 
   const raw = await readFile(sourcePath, "utf8");
-  const metadata = await loadOptionalMetadata(options.cwd, sourcePath, options.metadataPath);
+  const embedded = extension === ".md" ? splitOpinionMarkdown(raw) : undefined;
+  if (isSummaryArtifact(sourcePath, embedded?.metadata)) throw new Error("Generated summaries are not opinion sources; supply the original HTML or opinion Markdown.");
+  const metadata = embedded?.metadata && !options.metadataPath
+    ? { path: sourcePath, data: embedded.metadata }
+    : await loadOptionalMetadata(options.cwd, sourcePath, options.metadataPath);
   const provider = metadataProvider(metadata.data);
-  if (extension === ".md" && /## Machine-readable metadata/i.test(raw) && /```json/i.test(raw)) {
+  if (extension === ".md" && !embedded?.metadata && /## Machine-readable metadata/i.test(raw) && /```json/i.test(raw)) {
     throw new Error("source_path appears to be a metadata sidecar; pass the corresponding opinion file instead.");
   }
   const extracted = extension === ".html" || extension === ".htm"
     ? extractOpinionText(raw, provider)
-    : raw.replace(/\r/g, "").trim();
+    : (embedded?.body ?? raw).replace(/\r/g, "").trim();
   const blocks = createBlocks(extracted);
   if (blocks.length === 0 || extracted.length < 200) {
     throw new Error("No usable full-opinion text could be extracted from source_path.");

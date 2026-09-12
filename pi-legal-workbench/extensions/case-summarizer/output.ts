@@ -1,3 +1,4 @@
+import { renderOpinionMarkdown } from "../shared/opinion-markdown.ts";
 import { realpath, writeFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
 import {
@@ -127,7 +128,7 @@ export function renderSummaryMarkdown(
     ].join("\n")).join("\n\n")
     : "_No deterministically verified key quotations included._";
 
-  return [
+  return renderOpinionMarkdown({ artifact_type: "case_summary", recipe_version: 1, generated_at: new Date().toISOString(), source_path: source.sourcePath, source_sha256: source.rawSha256 }, [
     `# ${title}`,
     identityLines.join("\n"),
     ...sections,
@@ -140,7 +141,7 @@ export function renderSummaryMarkdown(
     `- Source SHA-256: \`${source.rawSha256}\``,
     `- Normalized text SHA-256: \`${source.textSha256}\``,
     warnings.length ? "## Validation warnings\n\n" + warnings.map((warning) => `- ${warning}`).join("\n") : "",
-  ].filter(Boolean).join("\n\n") + "\n";
+  ].filter(Boolean).join("\n\n") + "\n");
 }
 
 async function resolveOutputPath(cwd: string, requestedPath: string): Promise<string> {
@@ -173,4 +174,22 @@ export async function saveSummaryOutput(
     : markdown;
   await writeFile(outputPath, content, { encoding: "utf8", flag: "wx" });
   return outputPath;
+}
+
+export async function saveDefaultSummaryOutput(
+  cwd: string,
+  sourcePath: string,
+  summary: StructuredCaseSummary,
+  markdown: string,
+): Promise<string> {
+  const stem = sourcePath.slice(0, -extname(sourcePath).length);
+  for (let version = 1; version <= 1_000; version++) {
+    const path = `${stem}.Summary${version === 1 ? "" : `.${version}`}.md`;
+    try {
+      return await saveSummaryOutput(cwd, path, summary, markdown);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  throw new Error("Could not allocate a summary filename without overwriting existing work; supply a new output_path.");
 }

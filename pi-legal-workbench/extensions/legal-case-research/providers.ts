@@ -17,6 +17,9 @@ import { clickCourtListenerResult, openCourtListenerBrowser, searchCourtListener
 import { clickScholarResult, openScholarBrowser, searchScholarPage } from "./provider-google-scholar.ts";
 
 export interface SavedOpinion {
+  markdownPath?: string;
+  markdownError?: string;
+  summary?: { status: "completed" | "failed"; path?: string; sourceSha256?: string; summarySha256?: string; error?: string };
   provider: ProviderId;
   providerId?: string;
   sourceUrl: string;

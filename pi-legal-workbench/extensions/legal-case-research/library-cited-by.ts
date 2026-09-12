@@ -1,3 +1,4 @@
+import { processDownloadedOpinion } from "./opinion-processing.ts";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { AgentToolUpdateCallback, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -31,6 +32,7 @@ import {
 } from "./workflows.ts";
 
 export interface LegalCitedByCollectOptions {
+  summarize?: boolean;
   action: "collect" | "refresh";
   run_id?: string;
   case_key: string;
@@ -43,6 +45,7 @@ export interface LegalCitedByCollectOptions {
 }
 
 export interface LegalCitedByResumeOptions {
+  summarize?: boolean;
   action: "resume";
   run_id?: string;
   case_key: string;
@@ -268,14 +271,15 @@ export async function runLegalCitedBy(
   const unexpected = Object.keys(options).filter((key) => !(
     options.action !== "resume"
       ? [
-        "action", "case_key", "run_id", "pages_to_search", "max_cases_to_download", "runtime_limit_minutes",
+        "action", "case_key", "run_id", "pages_to_search", "max_cases_to_download", "runtime_limit_minutes", "summarize",
         "jurisdiction", "year_from", "year_to",
       ].includes(key)
       : [
-        "action", "case_key", "run_id", "pages_to_search", "max_cases_to_download", "runtime_limit_minutes",
+        "action", "case_key", "run_id", "pages_to_search", "max_cases_to_download", "runtime_limit_minutes", "summarize",
       ].includes(key)
   ));
   if (unexpected.length) throw new Error(`action=${options.action} does not accept: ${unexpected.join(", ")}.`);
+  if (options.summarize !== undefined && typeof options.summarize !== "boolean") throw new Error("summarize must be a boolean.");
   const limits = legalCitedByLimits(options);
   const requestedPages = limits.pagesToSearch;
   const requestedDownloadLimit = limits.maxCasesToDownload;
@@ -311,6 +315,10 @@ export async function runLegalCitedBy(
   if (options.action === "refresh" && !previous) throw new Error("No earlier cited-by collection exists to refresh; use action=collect first.");
   const directory = options.action === "resume" ? previous!.directory : newCitedCollectionDirectory(ctx.cwd, seed);
   const manifestPath = join(directory, "cited-by-manifest.json");
+  const previousCollection = previous && existsSync(join(previous.directory, "collection.json"))
+    ? readJsonFile<{ summarize?: boolean }>(join(previous.directory, "collection.json")) : undefined;
+  const summarize = options.summarize ?? previousCollection?.summarize ?? false;
+  if (options.action === "resume" && previousCollection) writeJsonAtomic(join(directory, "collection.json"), { ...readJsonFile<Record<string, unknown>>(join(directory, "collection.json")), summarize });
   const runId = directory.split(/[\\/]/).at(-1)!;
   let enumeration: CitedByOutcome;
   if (options.action === "resume") {
@@ -325,7 +333,7 @@ export async function runLegalCitedBy(
     if (filters.year_from !== undefined && filters.year_to !== undefined && filters.year_from > filters.year_to) throw new Error("Inherited and requested year filters conflict; year_from cannot exceed year_to.");
     const baselinePath = previous ? join(previous.directory, "cited-by-results.json") : undefined;
     const baselineCaseKeys = baselinePath && existsSync(baselinePath) ? readJsonFile<NormalizedCase[]>(baselinePath).map(item => item.canonicalKey) : [];
-    writeJsonAtomic(join(directory, "collection.json"), { schemaVersion: 1, runId, caseKey: seed.canonicalKey,
+    writeJsonAtomic(join(directory, "collection.json"), { schemaVersion: 1, runId, caseKey: seed.canonicalKey, summarize,
       refreshedFrom: previous?.manifestPath, baselineCaseKeys, filters, createdAt: new Date().toISOString() });
     writeFileSync(join(directory, "review.md"), "# Cited-by research review\n\n## Purpose\n\n## Useful authorities and source versions\n\n## Rejected authorities and reasons\n\n## Unresolved treatment questions\n\n## Next steps\n", { flag: "wx" });
     enumeration = await runtime.enumerate({ seed, providers: seedProviders, save_path: directory,
@@ -344,11 +352,15 @@ export async function runLegalCitedBy(
   const priorByKey = new Map(prior.filter(Boolean).map((item) => [item!.case.canonicalKey, item!]));
   const downloads: Array<DownloadedCase | null> = cases.map((item) => priorByKey.get(item.canonicalKey) ?? null);
   const selectedCases = selectDownloadCases(cases, enumeration.downloadLimit);
+  let processingStopped = false;
   for (let index = 0; index < selectedCases.length; index += 1) {
+    if (signal?.aborted || Date.now() >= deadline) { processingStopped = true; break; }
     const item = cases[index];
     const existing = downloads[index];
     if (existing?.status === "downloaded" && checkOpinionIntegrity(existing.saved, caseLibrary).status === "valid") {
       downloads[index] = existing;
+      await processDownloadedOpinion(existing, summarize, signal, onUpdate, ctx);
+      writeJsonAtomic(downloadsPath, downloads);
       continue;
     }
     if (existing?.status === "downloaded") {
@@ -357,7 +369,12 @@ export async function runLegalCitedBy(
     }
     const reusable = findSavedOpinion(caseLibrary, item);
     warnings.push(...reusable.warnings);
-    if (reusable.saved) { downloads[index] = { case: item, status: "downloaded", saved: reusable.saved }; continue; }
+    if (reusable.saved) {
+      downloads[index] = { case: item, status: "downloaded", saved: reusable.saved };
+      await processDownloadedOpinion(downloads[index]!, summarize, signal, onUpdate, ctx);
+      writeJsonAtomic(downloadsPath, downloads);
+      continue;
+    }
     if (signal?.aborted) break;
     if (Date.now() >= deadline) break;
     emit(onUpdate, `Saving citing case ${index + 1} of ${selectedCases.length}: ${item.title}`, {
@@ -375,15 +392,21 @@ export async function runLegalCitedBy(
         signal,
         onUpdate,
       );
+      writeJsonAtomic(downloadsPath, downloads);
       if (downloads[index]?.status === "downloaded") {
         const integrity = checkOpinionIntegrity(downloads[index]!.saved, caseLibrary);
         if (integrity.status !== "valid") downloads[index] = { case: item, status: "failed", error: integrity.reason };
+        else await processDownloadedOpinion(downloads[index]!, summarize, signal, onUpdate, ctx);
       }
     } catch (error) {
       if (signal?.aborted) break;
       throw error;
     }
     writeJsonAtomic(downloadsPath, downloads);
+  }
+  for (const download of downloads) {
+    if (download?.saved?.markdownError) warnings.push(`${download.case.title}: Markdown conversion failed: ${download.saved.markdownError}`);
+    if (download?.saved?.summary?.status === "failed") warnings.push(`${download.case.title}: Summary failed: ${download.saved.summary.error}`);
   }
   const contentDuplicates = markExactContentDuplicates(downloads);
   writeJsonAtomic(downloadsPath, downloads);
@@ -397,8 +420,8 @@ export async function runLegalCitedBy(
   const downloadsPending = selectedDownloads.some((item) => item === null);
   const status = classifyLegalCitedByStatus(
     enumeration.status,
-    Boolean((signal?.aborted || Date.now() >= deadline) && downloadsPending),
-    failedDownloads,
+    Boolean(processingStopped || ((signal?.aborted || Date.now() >= deadline) && downloadsPending)),
+    failedDownloads + selectedDownloads.filter(d => d?.saved?.markdownError || (summarize && d?.saved?.summary?.status === "failed")).length,
   );
   const collection = existsSync(join(directory, "collection.json")) ? readJsonFile<{ refreshedFrom?: string; baselineCaseKeys?: string[] }>(join(directory, "collection.json")) : {};
   const baselineKeys = new Set(collection.baselineCaseKeys ?? []);

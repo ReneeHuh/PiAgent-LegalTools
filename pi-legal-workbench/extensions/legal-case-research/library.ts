@@ -147,6 +147,7 @@ export function searchLibrary(cwd: string, options: { query?: string; case_key?:
     if (!terms.every(term => searchable.includes(term))) return [];
     return [{ case_key: item.canonicalKey, title: item.title, citations: item.citations, court: item.court ?? null, date: item.dateFiled ?? item.year ?? null,
       publication_status: item.publicationStatus ?? null, source_path: record.source.savedPath, metadata_path: metadataPath,
+      opinion_markdown_path: record.source.markdownPath ?? null, summary: record.source.summary ?? null,
       provider: record.source.provider, source_url: record.source.sourceUrl, downloaded_at: record.downloadedAt ?? null,
       html_sha256: record.source.htmlSha256 ?? null, integrity, matching_passage: matchingPassage(text, options.query ?? "") ?? null }];
   });

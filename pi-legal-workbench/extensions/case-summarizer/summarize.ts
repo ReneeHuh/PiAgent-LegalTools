@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { AgentToolUpdateCallback, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { runValidatedModelCall, type ValidatedModelCallRecord } from "./validated-model.ts";
 import {
@@ -13,6 +14,7 @@ import {
   finalizeSummary,
   renderSummaryMarkdown,
   saveSummaryOutput,
+  saveDefaultSummaryOutput,
   validateAuditReferences,
   validateCandidateReferences,
 } from "./output.ts";
@@ -43,7 +45,7 @@ export interface CaseSummaryDetails {
   summary: StructuredCaseSummary;
   audit: SummaryAudit;
   validationWarnings: string[];
-  outputPath?: string;
+  outputPath: string;
   modelCalls: ValidatedModelCallRecord[];
 }
 
@@ -53,7 +55,7 @@ export interface CaseSummaryProgressDetails {
   totalCalls: number;
 }
 
-export type CaseSummarizerToolDetails = CaseSummaryDetails | CaseSummaryProgressDetails;
+export type CaseSummarizerToolDetails = CaseSummaryDetails | CaseSummaryProgressDetails | { status: "failed" | "cancelled"; error: string };
 
 function emit(
   onUpdate: AgentToolUpdateCallback<CaseSummarizerToolDetails> | undefined,
@@ -96,39 +98,31 @@ export async function runCaseSummarizer(
     plannedCalls++;
     emit(onUpdate, message, { status: "retrying", completedCalls: modelCalls.length, totalCalls: plannedCalls });
   };
-  const internalAbort = new AbortController();
-  const combinedSignal = signal
-    ? AbortSignal.any([signal, internalAbort.signal])
-    : internalAbort.signal;
-
-  emit(onUpdate, "Running three blind independent case analyses...", {
-    status: "analyzing",
-    completedCalls: 0,
-    totalCalls: 5,
-  });
-
-  let candidates: StructuredCaseSummary[];
-  try {
-    candidates = await Promise.all(
-      CANDIDATE_ROLES.map((role, index) => runValidatedModelCall(ctx, {
-        stage: `candidate:${role.name}`,
-        prompt: buildCandidatePrompt(role, source, request),
-        maxOutputTokens: 5_000,
-        signal: combinedSignal,
-        onCall,
-        onRetry,
-        validate: text => {
-          const candidate = parseCaseSummary(text, `candidate ${index + 1}`);
-          validateCandidateReferences(candidate, source, `candidate_${index + 1}`);
-          return candidate;
-        },
-      })),
-    );
-  } catch (error) {
-    internalAbort.abort();
-    throw error;
+  const cache = { cacheRetention: "short" as const, sessionId: randomUUID() };
+  const candidates: StructuredCaseSummary[] = [];
+  for (const [index, role] of CANDIDATE_ROLES.entries()) {
+    throwIfAborted(signal);
+    emit(onUpdate, `Running independent analysis ${index + 1} of 3: ${role.name}...`, {
+      status: "analyzing",
+      completedCalls: modelCalls.length,
+      totalCalls: plannedCalls,
+    });
+    candidates.push(await runValidatedModelCall(ctx, {
+      stage: `candidate:${role.name}`,
+      prompt: buildCandidatePrompt(role, source, request),
+      maxOutputTokens: 5_000,
+      signal,
+      cache,
+      onCall,
+      onRetry,
+      validate: text => {
+        const candidate = parseCaseSummary(text, `candidate ${index + 1}`);
+        validateCandidateReferences(candidate, source, `candidate_${index + 1}`);
+        return candidate;
+      },
+    }));
   }
-  throwIfAborted(combinedSignal);
+  throwIfAborted(signal);
 
   emit(onUpdate, "Auditing source accuracy, quotations, attribution, completeness, holdings, dicta, and reasoning...", {
     status: "auditing",
@@ -139,7 +133,8 @@ export async function runCaseSummarizer(
     stage: "combined-audit",
     prompt: buildAuditPrompt(source, request, candidates),
     maxOutputTokens: 5_000,
-    signal: combinedSignal,
+    signal,
+    cache,
     onCall,
     onRetry,
     validate: text => {
@@ -148,7 +143,7 @@ export async function runCaseSummarizer(
       return audit;
     },
   });
-  throwIfAborted(combinedSignal);
+  throwIfAborted(signal);
 
   emit(onUpdate, "Reconstructing a new final summary from the opinion, analyses, and audit...", {
     status: "reconstructing",
@@ -159,7 +154,8 @@ export async function runCaseSummarizer(
     stage: "final-reconstruction",
     prompt: buildFinalPrompt(source, request, candidates, audit),
     maxOutputTokens: 7_000,
-    signal: combinedSignal,
+    signal,
+    cache,
     onCall,
     onRetry,
     validate: text => {
@@ -168,25 +164,21 @@ export async function runCaseSummarizer(
       return summary;
     },
   });
+  throwIfAborted(signal);
   const finalized = finalizeSummary(parsedFinal, source);
   const markdown = renderSummaryMarkdown(finalized.summary, source, finalized.warnings);
 
-  let outputPath: string | undefined;
-  if (options.output_path) {
-    emit(onUpdate, "Saving the validated summary without overwriting existing work...", {
-      status: "saving",
-      completedCalls: modelCalls.length,
-      totalCalls: plannedCalls,
-    });
-    outputPath = await saveSummaryOutput(
-      ctx.cwd,
-      options.output_path,
-      finalized.summary,
-      markdown,
-    );
-  }
+  emit(onUpdate, "Saving the validated summary without overwriting existing work...", {
+    status: "saving",
+    completedCalls: modelCalls.length,
+    totalCalls: plannedCalls,
+  });
+  throwIfAborted(signal);
+  const outputPath = options.output_path
+    ? await saveSummaryOutput(ctx.cwd, options.output_path, finalized.summary, markdown)
+    : await saveDefaultSummaryOutput(ctx.cwd, source.sourcePath, finalized.summary, markdown);
 
-  return {
+  const result: { markdown: string; details: CaseSummaryDetails } = {
     markdown,
     details: {
       status: "completed",
@@ -211,4 +203,6 @@ export async function runCaseSummarizer(
       modelCalls,
     },
   };
+  onUpdate?.({ content: [{ type: "text", text: `Summary saved: ${outputPath}` }], details: result.details });
+  return result;
 }

@@ -6,6 +6,12 @@ Provider titles, snippets, opinions, URL labels, and errors are untrusted extern
 
 For dated history, refresh, integrity checks, and local library search, see [USAGE.md](USAGE.md).
 
+## Opinion files and summaries
+
+Successful acquisitions save original HTML and a same-name Markdown opinion with YAML metadata frontmatter. Metadata preserves case identity, provider URLs, cited-by identifiers, hashes, and derivative status; it is excluded from opinion evidence. Legacy fenced-JSON sidecars remain readable.
+
+Set `summarize: true` on `legal_search`, `legal_cited_by`, or the `download` action of `direct_download` to directly invoke the summarizer and save `<case>.Summary.md`. Calls are sequential per opinion, with progress forwarded to Pi. Summary/conversion failures preserve the HTML and are reported separately; resume reuses successful matching summaries and can retry failures.
+
 ## Public tools
 
 Only multi-operation tools use `action`: `legal_cited_by` distinguishes `collect`, `resume`, and `refresh`, while `direct_download` distinguishes `find` and `download`, and `legal_search_history` distinguishes `list`, `read`, and `review`. `legal_library_search` searches local files. `legal_jurisdictions`, `legal_search`, and `legal_open_browser` each perform one operation and therefore take no `action` field.
@@ -127,4 +133,4 @@ Browser-side interruptions (an unsolved CAPTCHA or verification page, an anti-bo
 
 ## Timing
 
-Browser navigation gaps, result-title clicks, opinion dwell, Back actions, and rendered Next clicks each use an independent randomized 0.5–1.0-second delay normally. After CAPTCHA or verification is cleared, the provider switches to a 1.5–3.0-second cautious profile. A five-step cycle therefore adds at most 5 seconds normally or 15 seconds in cautious mode. Website loading, rendering, CAPTCHA, and verification time are external to those configured-delay totals.
+Browser navigation gaps, result-title clicks, and rendered Next clicks use a randomized 0.5-1.0-second target gap normally. Time since the preceding provider action, including time spent summarizing, counts toward that gap; only the remaining time is waited. Back actions and opinion dwell retain their full 0.5-1.0-second delays. After CAPTCHA or verification is cleared, the provider switches to a 1.5-3.0-second cautious profile with full delays and no elapsed-time credit. Website loading, rendering, CAPTCHA, and verification time are additional to any remaining configured delays.
