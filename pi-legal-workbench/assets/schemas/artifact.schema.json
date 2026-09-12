@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/pi-legal-workbench/artifact.schema.json",
+  "title": "Pi Legal Workbench Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactId",
+    "matterId",
+    "artifactType",
+    "path",
+    "sha256",
+    "createdAt",
+    "createdBy",
+    "reviewStatus"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "matterId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "parentArtifactIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdBy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["tool"],
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "toolVersion": {
+          "type": ["string", "null"]
+        },
+        "model": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "reviewStatus": {
+      "enum": [
+        "unreviewed",
+        "review_pending",
+        "approved",
+        "rejected",
+        "superseded"
+      ]
+    }
+  }
+}

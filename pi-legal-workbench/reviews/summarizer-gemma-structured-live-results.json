@@ -1,0 +1,115 @@
+{
+  "status": "completed",
+  "directory": "C:\\Users\\bacon21\\AppData\\Local\\Temp\\summary-gemma-live-qT2MwR",
+  "model": "google/gemma-4-26b-a4b-qat",
+  "calls": 5,
+  "requests": [
+    {
+      "call": 1,
+      "api": "openai-completions",
+      "responseFormat": "json_schema",
+      "schemaName": "case_summary",
+      "strict": true
+    },
+    {
+      "call": 2,
+      "api": "openai-completions",
+      "responseFormat": "json_schema",
+      "schemaName": "case_summary",
+      "strict": true
+    },
+    {
+      "call": 3,
+      "api": "openai-completions",
+      "responseFormat": "json_schema",
+      "schemaName": "case_summary",
+      "strict": true
+    },
+    {
+      "call": 4,
+      "api": "openai-completions",
+      "responseFormat": "json_schema",
+      "schemaName": "case_summary_audit",
+      "strict": true
+    },
+    {
+      "call": 5,
+      "api": "openai-completions",
+      "responseFormat": "json_schema",
+      "schemaName": "case_summary",
+      "strict": true
+    }
+  ],
+  "endpoints": [
+    "/v1/chat/completions",
+    "/v1/chat/completions",
+    "/v1/chat/completions",
+    "/v1/chat/completions",
+    "/v1/chat/completions"
+  ],
+  "modelCallFormats": [
+    {
+      "stage": "candidate:legal-structure",
+      "api": "openai-completions",
+      "format": "json_schema"
+    },
+    {
+      "stage": "candidate:skeptical-analysis",
+      "api": "openai-completions",
+      "format": "json_schema"
+    },
+    {
+      "stage": "candidate:facts-and-procedure",
+      "api": "openai-completions",
+      "format": "json_schema"
+    },
+    {
+      "stage": "combined-audit",
+      "api": "openai-completions",
+      "format": "json_schema"
+    },
+    {
+      "stage": "final-reconstruction",
+      "api": "openai-completions",
+      "format": "json_schema"
+    }
+  ],
+  "warnings": [],
+  "caseIdentity": {
+    "name": "Hopkins v. DENEWETH, DUGAN & PARFITT, P.C.",
+    "court": "Mich: Court of Appeals",
+    "date": "October 20, 2016",
+    "docket": "No. 327741",
+    "citations": [
+      "No. 327741"
+    ]
+  },
+  "retriedStages": [],
+  "rawSchemaValidation": [
+    {
+      "call": 1,
+      "schemaName": "case_summary",
+      "valid": true
+    },
+    {
+      "call": 3,
+      "schemaName": "case_summary",
+      "valid": true
+    },
+    {
+      "call": 2,
+      "schemaName": "case_summary",
+      "valid": true
+    },
+    {
+      "call": 4,
+      "schemaName": "case_summary_audit",
+      "valid": true
+    },
+    {
+      "call": 5,
+      "schemaName": "case_summary",
+      "valid": true
+    }
+  ]
+}

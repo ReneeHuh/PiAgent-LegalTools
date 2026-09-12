@@ -1,0 +1,21 @@
+{
+  "historyRuns": 4,
+  "citedByCollections": 2,
+  "libraryResults": [
+    {
+      "caseKey": "miranda-v-arizona--94bcf2c2df",
+      "integrity": "valid",
+      "linkedSearches": 1,
+      "citedByRuns": 0
+    },
+    {
+      "caseKey": "miranda-v-arizona--0c5d1c7faa",
+      "integrity": "valid",
+      "linkedSearches": 1,
+      "citedByRuns": 2
+    }
+  ],
+  "inspectedRunId": "2026-09-11-michigan-reasonable-care-7360f75d",
+  "inspectedResults": 40,
+  "inspectedPageLength": 5
+}

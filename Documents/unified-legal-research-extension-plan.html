@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unified Pi Legal Research Extension — Implementation Plan</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #5d6b78;
+      --paper: #ffffff;
+      --canvas: #f4f6f8;
+      --line: #d8dee5;
+      --navy: #153451;
+      --blue: #2368a2;
+      --blue-soft: #eaf3fb;
+      --green: #13795b;
+      --green-soft: #e8f6f0;
+      --amber: #a45b00;
+      --amber-soft: #fff4df;
+      --red: #b42318;
+      --red-soft: #fff0ee;
+      --shadow: 0 10px 34px rgba(21, 52, 81, .09);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    a { color: var(--blue); text-underline-offset: 2px; }
+    code, pre { font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
+    code {
+      padding: .1rem .32rem;
+      border: 1px solid #dbe6ef;
+      border-radius: 5px;
+      background: #f2f7fb;
+      font-size: .92em;
+      overflow-wrap: anywhere;
+    }
+    pre code { overflow-wrap: normal; }
+    pre {
+      margin: .8rem 0 0;
+      padding: 1rem;
+      overflow: auto;
+      border: 1px solid #ccd8e2;
+      border-radius: 10px;
+      color: #eaf3fb;
+      background: #102a40;
+      font-size: .82rem;
+      line-height: 1.55;
+    }
+
+    .hero {
+      padding: 4.5rem max(1.25rem, calc((100vw - 1180px) / 2)) 3.5rem;
+      color: white;
+      background:
+        radial-gradient(circle at 82% 20%, rgba(91, 166, 219, .24), transparent 35%),
+        linear-gradient(135deg, #102a40 0%, #153f61 65%, #1d5a80 100%);
+    }
+    .eyebrow {
+      margin: 0 0 .7rem;
+      color: #a9d5f3;
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 900px;
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2.35rem, 5vw, 4.7rem);
+      font-weight: 500;
+      line-height: 1.02;
+      letter-spacing: -.035em;
+    }
+    .subtitle {
+      max-width: 820px;
+      margin: 1.25rem 0 0;
+      color: #dcebf5;
+      font-size: 1.12rem;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .65rem;
+      margin-top: 2rem;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .36rem .72rem;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 999px;
+      color: #ecf7ff;
+      background: rgba(255,255,255,.08);
+      font-size: .82rem;
+      font-weight: 700;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 235px minmax(0, 1fr);
+      gap: 2rem;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    nav {
+      position: sticky;
+      top: 1.25rem;
+      align-self: start;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.92);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+    nav strong {
+      display: block;
+      margin: 0 0 .55rem;
+      color: var(--navy);
+      font-size: .76rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    nav a {
+      display: block;
+      padding: .42rem .55rem;
+      border-radius: 7px;
+      color: #33485a;
+      text-decoration: none;
+      font-size: .88rem;
+    }
+    nav a:hover { color: var(--blue); background: var(--blue-soft); }
+
+    main { min-width: 0; }
+    section {
+      margin-bottom: 1.4rem;
+      padding: clamp(1.25rem, 3vw, 2rem);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    h2 {
+      margin: 0 0 1rem;
+      color: var(--navy);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.85rem;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+    h3 { margin: 1.45rem 0 .6rem; color: #234760; font-size: 1.05rem; }
+    p { margin: .65rem 0; }
+    ul, ol { padding-left: 1.3rem; }
+    li + li { margin-top: .36rem; }
+    .lede { color: #3e5263; font-size: 1.04rem; }
+    .small { color: var(--muted); font-size: .84rem; }
+
+    .decision {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .85rem;
+      margin-top: 1.2rem;
+    }
+    .decision > div, .card {
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fbfcfd;
+    }
+    .decision b, .card b { display: block; margin-bottom: .32rem; color: var(--navy); }
+
+    .callout {
+      margin: 1rem 0;
+      padding: .9rem 1rem;
+      border-left: 4px solid var(--blue);
+      border-radius: 0 9px 9px 0;
+      background: var(--blue-soft);
+    }
+    .callout.warning { border-left-color: var(--amber); background: var(--amber-soft); }
+    .callout.danger { border-left-color: var(--red); background: var(--red-soft); }
+    .callout.success { border-left-color: var(--green); background: var(--green-soft); }
+    .callout p { margin: 0; }
+
+    .badge {
+      display: inline-block;
+      padding: .18rem .5rem;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .yes { color: #075940; background: #dff4eb; }
+    .partial { color: #7a4500; background: #ffedc7; }
+    .no { color: #8b1a12; background: #ffe0dc; }
+    .native { color: #174f78; background: #dceefb; }
+
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+    th, td { padding: .72rem .76rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: #24465f; background: #f0f5f8; font-size: .76rem; letter-spacing: .035em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+
+    .mode-grid, .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .9rem;
+    }
+    .mode {
+      position: relative;
+      padding: 1.05rem 1.05rem 1rem 3.7rem;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fbfcfd;
+    }
+    .mode-number {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      display: grid;
+      width: 2rem;
+      height: 2rem;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--navy);
+      font-weight: 800;
+    }
+    .mode h3 { margin: 0 0 .35rem; }
+    .mode p { margin: .3rem 0; }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .45rem;
+      margin: 1rem 0;
+    }
+    .flow span {
+      padding: .45rem .65rem;
+      border: 1px solid #bfd0dc;
+      border-radius: 7px;
+      color: #21445d;
+      background: #f3f8fb;
+      font-size: .78rem;
+      font-weight: 700;
+    }
+    .flow i { color: #7890a2; font-style: normal; }
+
+    .phase {
+      display: grid;
+      grid-template-columns: 4.2rem 1fr;
+      gap: .9rem;
+      padding: .9rem 0;
+      border-top: 1px solid var(--line);
+    }
+    .phase:first-of-type { border-top: 0; }
+    .phase-num {
+      color: var(--blue);
+      font-size: .77rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .phase h3 { margin: 0 0 .28rem; }
+    .phase p { margin: .25rem 0; }
+
+    .checklist { list-style: none; padding: 0; }
+    .checklist li { position: relative; padding-left: 1.55rem; }
+    .checklist li::before {
+      position: absolute;
+      left: .1rem;
+      top: .05rem;
+      color: var(--green);
+      content: "✓";
+      font-weight: 900;
+    }
+    footer {
+      max-width: 1180px;
+      margin: 0 auto 2rem;
+      padding: 0 1.25rem;
+      color: var(--muted);
+      font-size: .8rem;
+      text-align: center;
+    }
+
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; display: grid; grid-template-columns: repeat(2, 1fr); }
+      nav strong { grid-column: 1 / -1; }
+      .decision, .mode-grid, .two-col { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: white; }
+      .hero { padding: 2rem; }
+      .layout { display: block; max-width: none; padding: 1rem 0; }
+      nav { display: none; }
+      section { break-inside: avoid; box-shadow: none; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">Architecture and delivery plan · 26 August 2026</p>
+    <h1>One Pi extension for a two-stage case-research workflow</h1>
+    <p class="subtitle">
+      Consolidate CourtListener, Google Scholar, FindLaw, and Justia behind one installed extension,
+      one normalized case model, four explicit operating modes, and a clear boundary between finding
+      candidate cases and checking selected authorities.
+    </p>
+    <div class="hero-meta">
+      <span class="pill">1 extension</span>
+      <span class="pill">4 providers</span>
+      <span class="pill">2 research stages</span>
+      <span class="pill">4 workflow modes</span>
+      <span class="pill">Optional AI case briefs</span>
+      <span class="pill">Visible, resumable browser automation</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="Report sections">
+      <strong>Contents</strong>
+      <a href="#decision">Decision</a>
+      <a href="#baseline">Current baseline</a>
+      <a href="#capabilities">Provider capabilities</a>
+      <a href="#modes">Mode definitions</a>
+      <a href="#contract">Tool contract</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#matching">Case matching</a>
+      <a href="#storage">Downloads and recovery</a>
+      <a href="#summaries">AI Markdown summaries</a>
+      <a href="#delivery">Delivery phases</a>
+      <a href="#testing">Tests and acceptance</a>
+      <a href="#risks">Risks</a>
+      <a href="#sources">Live references</a>
+    </nav>
+
+    <main>
+      <section id="decision">
+        <h2>Recommended decision</h2>
+        <p class="lede">
+          Build a single extension package named <code>legal-research</code>, with one entry point and four
+          source-neutral tools: <code>legal_research</code> for the four workflows, <code>legal_read_case</code>
+          for chunked opinion reading, <code>legal_record_case_check</code> for recording proposition-specific
+          opinion/citator review, and <code>legal_open_browser</code> for handing a provider tab to the user.
+          Present those capabilities as two research stages: Stage 1 finds cases through ordinary search and
+          exhaustive cited-by enumeration; Stage 2 downloads selected cases for full-opinion review, source-grounded
+          briefing, and external citator checking. Provider adapters remain internal to the one installed extension.
+        </p>
+        <div class="decision">
+          <div><b>Single installed unit</b>One extension appears in Pi. Multiple focused tools do not require multiple extensions.</div>
+          <div><b>Stage 1 — find and expand</b>Scholar-preferred ordinary search plus a complete-within-source cited-by report containing case identity, court/date, provider blurb, provenance, and links—never full opinions.</div>
+          <div><b>Stage 2 — check selected cases</b>Download and read only promoted cases, verify holdings and quotations, inspect relevant citing passages, and record Shepard's/KeyCite/BCite or other authorized validation outside the free citation graph.</div>
+        </div>
+        <div class="callout success">
+          <p><strong>Key outcome:</strong> users first build a complete lightweight candidate list, then spend download, model, and lawyer-review effort only on cases selected for detailed checking.</p>
+        </div>
+        <div class="callout">
+          <p><strong>Optional enrichment:</strong> downloading workflows gain a <code>summarize</code> toggle, off by default. When enabled, the same extension creates one <code>case.md</code> companion with a source-grounded AI case brief and the extracted opinion text. No additional extension or public tool is required.</p>
+        </div>
+      </section>
+
+      <section id="baseline">
+        <h2>Current baseline and consolidation work</h2>
+        <p>
+          The repository currently contains two working standalone extensions:
+          <code>legal-research/provider-courtlistener.ts</code> and
+          <code>legal-research/provider-google-scholar.ts</code>.
+          Both load successfully under Pi 0.84.3 and already implement the hard operational pieces:
+          profile-specific Chrome discovery, raw CDP transport, visible verification handling, abort-aware waits,
+          serialized navigation, tab leases, atomic manifests, paging, chunked reading, and HTML archiving.
+        </p>
+        <p>
+          The installed Pi 0.84.3 API also supports the proposed nested model call: a tool's
+          <code>ExtensionContext</code> exposes <code>ctx.model</code> and <code>ctx.modelRegistry</code>, and
+          <code>ctx.modelRegistry.complete(...)</code> can run an isolated completion. Pi tool results can return
+          nested-model usage for session accounting. The local <code>examples/extensions/summarize.ts</code> demonstrates
+          this exact model-registry path.
+        </p>
+        <p>The consolidation should preserve those strengths while removing these seams:</p>
+        <ul>
+          <li>Chrome/CDP, tab, timing, parsing, recovery, and saving logic is duplicated across the two files.</li>
+          <li>Public parameters differ: <code>cluster_id</code> versus <code>case_id</code>, and <code>start</code> versus <code>start_page</code>.</li>
+          <li>Save-path behavior is inconsistent: CourtListener resolves relative paths through Pi's context, while Scholar's direct reader currently passes <code>save_dir</code> through directly.</li>
+          <li>Search, download, read, and open-browser actions are split into provider-specific tool names rather than a source-neutral workflow.</li>
+          <li>There is no fixture-driven parser or provider contract test suite, making page-layout changes expensive to diagnose.</li>
+        </ul>
+        <div class="callout warning">
+          <p><strong>Packaging interpretation:</strong> “one extension” should mean one installed package and one entry point. Internally, keep small provider modules for maintainability, then bundle them into one distributable artifact. A single 3,000+ line source file would make future layout repairs riskier without improving the user experience.</p>
+        </div>
+      </section>
+
+      <section id="capabilities">
+        <h2>Provider capability matrix</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Provider</th><th>General discovery</th><th>Exact opinion lookup</th><th>Full opinion</th><th>Native cited-by</th><th>Assigned role</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>CourtListener</strong></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge native">Native</span></td>
+                <td>Complementary search and capability fallback, the dependable cursor-paginated backbone for exhaustive-within-CourtListener cited-by enumeration, and a strong exact/read/download source. Preserve <code>cluster_id</code> and <code>cites_id</code>.</td>
+              </tr>
+              <tr>
+                <td><strong>Google Scholar</strong></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge native">Native</span></td>
+                <td>Preferred general search, merged-record presentation, and exact resolution; also supplements cited-by enumeration, reading, and download. Scholar exposes at most 1,000 results per query and does not offer bulk access, so an unexhausted or blocked Scholar lane remains explicitly incomplete.</td>
+              </tr>
+              <tr>
+                <td><strong>FindLaw</strong></td>
+                <td><span class="badge no">No</span></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge no">No</span></td>
+                <td>Document source only: accept a direct FindLaw URL or perform a tightly bounded exact-case lookup after CourtListener/Scholar identifies the case. Never use Cludo for general discovery.</td>
+              </tr>
+              <tr>
+                <td><strong>Justia</strong></td>
+                <td><span class="badge no">No</span></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge yes">Yes</span></td>
+                <td><span class="badge no">No</span></td>
+                <td>Document source only: accept a direct Justia URL or perform a tightly bounded exact-case lookup after identification elsewhere. Support both general and Supreme Court opinion layouts.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout danger">
+          <p><strong>Routing and completeness rule:</strong> FindLaw and Justia never supply general search results or cited-by cases. The unified <code>cited_by</code> mode collects only lightweight result metadata from CourtListener/Scholar and runs until every enabled provider reaches a terminal cursor/page or records a blocking failure. It may say “retrieval complete for the selected provider corpus” only after successful exhaustion; it never claims that every citing case in existence has been found.</p>
+        </div>
+        <h3>Filter capability contract</h3>
+        <p>
+          Filters are capabilities, not hints. Every discovery adapter declares each filter as <code>native</code>,
+          <code>post_filter</code>, or <code>unsupported</code>. The workflow preflights the complete request before
+          opening a browser: an explicit or combined discovery source with an unsupported filter fails with a structured
+          capability error; discovery <code>auto</code> chooses a provider that can honor the filter; and <code>fallback</code>
+          skips incapable providers with an explanation.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Provider</th><th>Court</th><th>Year range</th><th>Exact filed dates</th></tr></thead>
+            <tbody>
+              <tr><td><strong>CourtListener</strong></td><td>Native</td><td>Native</td><td>Native</td></tr>
+              <tr><td><strong>Google Scholar</strong></td><td>Native query/form constraint</td><td>Native whole-year range</td><td>Unsupported unless the requested dates map exactly to whole years</td></tr>
+              <tr><td><strong>FindLaw</strong></td><td>Not applicable</td><td>Not applicable</td><td>Not applicable</td></tr>
+              <tr><td><strong>Justia</strong></td><td>Not applicable</td><td>Not applicable</td><td>Not applicable</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">
+          Search filters apply only to CourtListener and Scholar discovery. FindLaw and Justia receive a resolved case
+          identity rather than the user's broad query, so they do not weaken or reinterpret discovery filters. Responses
+          report which discovery provider applied each filter and whether it was native or converted to a supported
+          whole-year constraint.
+        </p>
+      </section>
+
+      <section id="modes">
+        <h2>Two research stages, implemented by four public modes</h2>
+        <div class="two-col">
+          <div class="card">
+            <b>Stage 1 — find and expand</b>
+            <code>search</code> discovers ordinary candidates and <code>cited_by</code> exhaustively enumerates the
+            selected providers' citation results into a lightweight report. <code>search_download</code> remains an
+            explicit convenience when the user already wants every ordinary search result promoted for capture.
+          </div>
+          <div class="card">
+            <b>Stage 2 — check selected authorities</b>
+            A cited-by entry is promoted by passing its portable identity or provider URL to
+            <code>direct_download</code>, then using <code>legal_read_case</code>, the optional evidence-linked
+            <code>case.md</code>, and an external Shepard's/KeyCite/BCite review. Citation discovery never marks a case valid.
+          </div>
+        </div>
+        <div class="callout warning">
+          <p><strong>Stage boundary:</strong> cited-by collection records that one case cites another. It does not determine whether the citing court followed, distinguished, criticized, limited, or overruled the seed. Treatment belongs to Stage 2 and requires reading plus an authorized citator workflow.</p>
+        </div>
+        <div class="mode-grid">
+          <article class="mode">
+            <span class="mode-number">1</span>
+            <h3><code>search</code></h3>
+            <p>Search Google Scholar by default, CourtListener as fallback, or both concurrently. Parse result-page titles, citations, courts, dates, snippets, provider IDs, and URLs; never open an opinion link.</p>
+            <p class="small">May click their rendered Next controls until <code>max_pages</code>, <code>max_results</code>, end-of-results, or a hard provider ceiling. FindLaw and Justia are never queried in this mode.</p>
+          </article>
+          <article class="mode">
+            <span class="mode-number">2</span>
+            <h3><code>search_download</code></h3>
+            <p>Discover cases page-by-page through CourtListener/Scholar, then save each full opinion from the selected document source, return to discovery results, and click Next.</p>
+            <p class="small">Stops at <code>max_cases</code>/<code>max_pages</code>, persists after every case, and resumes from a manifest rather than a global page coordinate. <code>summarize=true</code> queues a companion <code>case.md</code>.</p>
+          </article>
+          <article class="mode">
+            <span class="mode-number">3</span>
+            <h3><code>cited_by</code></h3>
+            <p>Resolve one seed independently in each selected citation provider, enumerate every reachable provider page or cursor, deduplicate parallel citations, and incrementally write a cited-by report.</p>
+            <p class="small">The report contains only case name, citations, court/date, the preferred provider blurb, provider links, and provenance. This mode never opens opinions, downloads cases, or invokes the LLM. Long runs pause safely at time-slice boundaries and resume until exhausted.</p>
+          </article>
+          <article class="mode">
+            <span class="mode-number">4</span>
+            <h3><code>direct_download</code></h3>
+            <p>Resolve one specific case through CourtListener/Scholar (or accept a validated direct opinion URL), select a unique high-confidence document match, download that case only, and stop.</p>
+            <p class="small">If the top candidates are ambiguous, return them without downloading rather than silently choosing the wrong case. A successful download may optionally produce <code>case.md</code>.</p>
+          </article>
+        </div>
+
+        <div class="callout success">
+          <p><strong>Reading is preserved:</strong> <code>legal_read_case</code> accepts a normalized case selector plus <code>offset</code>, returns 12,000-character opinion chunks to the conversation, and may optionally archive the unmodified HTML snapshot. Reading is a separate tool because it has a different output and continuation contract from the four workflows.</p>
+        </div>
+
+        <h3>Stage 2 checking sequence</h3>
+        <div class="flow"><span>Promote selected candidate</span><i>→</i><span>Download exact opinion</span><i>→</i><span>Read full text</span><i>→</i><span>Identify proposition and exact passages</span><i>→</i><span>Review direct history and Shepard's/KeyCite/BCite</span><i>→</i><span>Record accepted, qualified, or rejected</span></div>
+        <p class="small">The extension prepares and records this work but does not scrape a licensed citator without authorized access. Free Scholar/CourtListener citation results, provider blurbs, automated treatment-language detection, and an LLM case brief remain research leads—not a “good law” determination.</p>
+
+        <h3>Mode state flows</h3>
+        <p><strong>Search:</strong></p>
+        <div class="flow"><span>Prefer Scholar or launch both lanes</span><i>→</i><span>Await page wave</span><i>→</i><span>Deduplicate</span><i>→</i><span>Scholar-first merge</span><i>→</i><span>Checkpoint and advance</span></div>
+        <p><strong>Search and download:</strong></p>
+        <div class="flow"><span>Discover case</span><i>→</i><span>Resolve chosen document source</span><i>→</i><span>Validate opinion identity</span><i>→</i><span>Save</span><i>→</i><span>Restore discovery page</span><i>→</i><span>Next result/page</span></div>
+        <p><strong>Cited by:</strong></p>
+        <div class="flow"><span>Resolve every seed identity</span><i>→</i><span>Enumerate all provider cursors/partitions</span><i>→</i><span>Checkpoint each page</span><i>→</i><span>Cross-source dedupe</span><i>→</i><span>Write metadata-only report</span><i>→</i><span>Exhaust or pause for resume</span></div>
+        <p><strong>Direct download:</strong></p>
+        <div class="flow"><span>Resolve identity in CourtListener/Scholar</span><i>→</i><span>Lookup preferred document copy</span><i>→</i><span>Require unique match</span><i>→</i><span>Save one case</span><i>→</i><span>Stop</span></div>
+      </section>
+
+      <section id="contract">
+        <h2>Proposed Pi tool contract</h2>
+        <p>
+          Register four tools from the one extension. Keep the four workflows in <code>legal_research</code>,
+          keep chunk continuation in <code>legal_read_case</code>, record a user's completed opinion/citator review
+          through <code>legal_record_case_check</code>, and keep visible browser handoff in
+          <code>legal_open_browser</code>. The implementation uses one flat, enum-driven schema for
+          <code>legal_research</code> and performs strict mode-specific validation before provider work. This avoids
+          relying on TypeBox <code>anyOf</code> rendering while keeping all four workflows in one tool and one extension.
+        </p>
+        <p class="note">The TypeScript below is the conceptual discriminated contract. Its runtime JSON schema is flattened for harness compatibility; invalid cross-mode and selector-field combinations fail preflight.</p>
+        <pre><code>type ProviderId = "courtlistener" | "scholar" | "findlaw" | "justia";
+type DiscoveryProviderId = "courtlistener" | "scholar";
+type CitationProviderId = DiscoveryProviderId;
+
+type DiscoverySelection =
+  | { strategy: "auto" }
+  | { strategy: "fallback"; providers: DiscoveryProviderId[] }
+  | {
+      strategy: "combine";
+      providers: DiscoveryProviderId[];
+      preferred?: DiscoveryProviderId; // default "scholar" when included
+      per_source_max?: number;
+    };
+
+type DocumentSelection =
+  | { strategy: "discovery" }
+  | { strategy: "fallback"; providers: ProviderId[] }
+  | { strategy: "all_available"; providers: ProviderId[] };
+
+type ReadDocumentSelection =
+  | { strategy: "discovery" }
+  | { strategy: "fallback"; providers: ProviderId[] };
+
+type CaseSelector =
+  | { kind: "url"; url: string }
+  | { kind: "provider_id"; provider: ProviderId; id: string }
+  | { kind: "citation"; citation: string; court?: string; year?: number }
+  | { kind: "docket"; docket_number: string; court: string }
+  | { kind: "query"; query: string; court?: string; year?: number };
+
+type Filters = {
+  court?: string;
+  year_from?: number;
+  year_to?: number;
+  filed_after?: string;        // exact date; capability-checked
+  filed_before?: string;       // exact date; capability-checked
+};
+
+type LegalResearchRequest =
+  | {
+      mode: "search";
+      query: string;
+      discovery_source?: DiscoverySelection; // default { strategy: "auto" } = Scholar first
+      filters?: Filters;
+      max_results?: number;    // default 20, hard max 1,000
+      max_pages?: number;      // default 3, hard max 100
+      max_runtime_minutes?: number; // default 10, hard max 30
+      start_page?: number;     // permitted only for exactly one provider
+    }
+  | {
+      mode: "search_download";
+      query: string;
+      discovery_source?: DiscoverySelection; // default { strategy: "auto" } = Scholar first
+      document_source?: DocumentSelection; // default { strategy: "discovery" }
+      filters?: Filters;
+      save_path?: string;
+      session_name?: string;
+      max_cases?: number;      // default 20, hard max 1,000
+      max_pages?: number;      // default 3, hard max 100
+      max_runtime_minutes?: number; // default 30, hard max 120
+      resume_from?: string;    // existing manifest path
+      max_mirror_lookups?: number; // default 0; required for alternative documents; hard max 100
+      max_lookup_pages?: number;   // default 1 per mirror, hard max 3
+      summarize?: boolean;     // default false; create case.md after capture
+      summary_model?: string;  // optional "provider/model"; default active model
+    }
+  | {
+      mode: "cited_by";
+      seed: CaseSelector;
+      discovery_sources?: CitationProviderId[]; // default ["courtlistener", "scholar"]
+      save_path?: string;
+      session_name?: string;
+      report_format?: "html" | "json" | "both"; // default "both"
+      time_slice_minutes?: number; // default 30, hard max 120; pauses, never caps results
+      resume_from?: string;    // existing manifest path
+    }
+  | {
+      mode: "direct_download";
+      case: CaseSelector;
+      discovery_source?: DiscoverySelection; // default auto; bypassed by direct URL/ID
+      document_source?: DocumentSelection; // default discovery or direct target
+      save_path?: string;
+      session_name?: string;
+      max_mirror_lookups?: number; // default 0; required for alternative documents; hard max 4
+      max_lookup_pages?: number; // default 1 per mirror, hard max 3
+      summarize?: boolean;     // default false
+      summary_model?: string;  // optional "provider/model"; default active model
+    };
+
+type LegalReadCaseRequest = {
+  case: CaseSelector;
+  discovery_source?: DiscoverySelection; // only when portable identity must be resolved
+  document_source?: ReadDocumentSelection; // reading returns one preferred opinion
+  offset?: number;             // default 0; 12,000 characters per response
+  max_mirror_lookups?: number; // default 0; required for alternative documents; hard max 4
+  max_lookup_pages?: number;   // default 1 per mirror, hard max 3
+  save_path?: string;
+};
+
+type LegalRecordCaseCheckRequest = {
+  case: CaseSelector;
+  save_path?: string;           // session containing the downloaded case
+  proposition: string;          // precise proposition being evaluated
+  opinion_reviewed: boolean;    // explicit user/reviewer attestation
+  supporting_passages?: Array&lt;{ quote: string; pin_cite?: string }&gt;;
+  citator?: {
+    provider: "shepards" | "keycite" | "bcite" | "other";
+    checked_at: string;
+    direct_history: "clear" | "negative" | "mixed" | "unknown";
+    treatment: "positive" | "neutral" | "limited" | "criticized" | "overruled" | "mixed" | "unknown";
+    notes?: string;
+    reviewer?: string;
+  };
+  decision: "accepted" | "qualified" | "rejected" | "undecided";
+};</code></pre>
+
+        <h3>Parameter rules</h3>
+        <ul>
+          <li>An omitted <code>discovery_source</code> means <code>{ strategy:"auto" }</code>: Google Scholar first, with CourtListener as the capability/availability fallback. It never selects FindLaw or Justia. A filter Scholar cannot honor natively falls back to CourtListener before navigation.</li>
+          <li>Discovery <code>fallback</code> and <code>combine</code> accept only Scholar and CourtListener. <code>combine</code> launches one page request per provider concurrently in separate profile/tab lanes, then deduplicates and merges the completed page wave. Scholar is the default preferred tie-breaker unless <code>preferred</code> says otherwise; original provider ranks remain in provenance.</li>
+          <li><code>DocumentSelection.strategy:"discovery"</code> downloads from the provider that found the case. <code>fallback</code> tries exact opinion copies in order and stops at the first high-confidence match; <code>all_available</code> may archive each validated copy while still counting one canonical case.</li>
+          <li>Every explicit provider list is non-empty and duplicate-free. Discovery lists are limited to CourtListener/Scholar; document lists may name any of the four providers.</li>
+          <li>A combined selection's <code>preferred</code> provider must appear in its provider list. When omitted and Scholar is present, Scholar is preferred; otherwise the first listed provider is preferred.</li>
+          <li>FindLaw and Justia receive only direct URLs/provider IDs or portable exact identity evidence such as a reporter citation or docket plus court. They never receive the user's broad query, discovery filters, result-page cursor, or cited-by request.</li>
+          <li>Any document provider other than the discovering/direct provider consumes one <code>max_mirror_lookups</code> unit. An alternative-document strategy with a zero budget fails preflight, and each exact resolver may inspect at most <code>max_lookup_pages</code>.</li>
+          <li>Page limits and request pacing apply independently per discovery lane; global result/case/runtime limits cap the workflow. The engine waits for both in-flight pages—or a recorded provider failure—before a deterministic merge, so network speed cannot change result order. It then starts the next concurrent page wave.</li>
+          <li><code>search</code> accepts only <code>discovery_source</code>, has no document/download fields, and never visits an opinion page.</li>
+          <li><code>summarize</code> is accepted only by workflows that save opinions: <code>search_download</code> and <code>direct_download</code>. It is off by default. The metadata-only <code>cited_by</code> mode rejects every download, document-source, mirror-lookup, and model field.</li>
+          <li><code>summary_model</code> is valid only when <code>summarize=true</code>. It resolves a configured, session-allowed <code>provider/model</code>; when omitted, the extension uses <code>ctx.model</code>. Model availability and authentication are checked before browser work begins.</li>
+          <li>A <code>CaseSelector</code> is conceptually discriminated. The flat runtime schema rejects incompatible identity fields, so exactly one seed form is accepted and every provider ID names its provider.</li>
+          <li><code>direct_download</code> saves exactly one canonical case only after the exact-match gate passes. A direct provider URL/ID bypasses discovery; explicit alternative document sources remain bounded exact lookups.</li>
+          <li><code>legal_record_case_check</code> never infers or performs a commercial citator check. It records an explicit reviewer-supplied result against one proposition, validates any quoted passages against the downloaded opinion when available, and preserves the provider, timestamp, notes, and decision. Omitting <code>citator</code> leaves the case visibly not citator-checked.</li>
+          <li><code>discovery_sources</code> is a non-empty, duplicate-free list and defaults to both citation providers. <code>cited_by</code> advances the selected graphs concurrently with independent pacing, cursors, partition queues, and failure state. Scholar supplies the preferred merged blurb when available; CourtListener remains the cursor-paginated enumeration backbone.</li>
+          <li><code>cited_by</code> has no citer, page, or result cap. Its only execution bound is <code>time_slice_minutes</code>, which checkpoints and returns <code>paused</code> rather than declaring completion. Repeated resume calls continue from the first uncompleted provider cursor or partition until every selected graph is exhausted or blocked.</li>
+          <li>The cited-by report writes one entry per canonical citing case: case name, every known citation, court, filed date, provider blurb, blurb source, source URLs/IDs, discovery ranks, and the citation edge to the seed. A missing blurb is recorded as <code>No result-page snippet provided</code>; the extension never invents one.</li>
+          <li>Completing <code>cited_by</code> opens no citing opinion, downloads no full case, creates no <code>case.md</code>, and makes no nested model call. A user promotes a report entry into Stage 2 with a separate <code>direct_download</code> request.</li>
+          <li><code>start_page</code> is one-based and valid only for one explicit CourtListener or Scholar discovery provider. Multi-provider and all resumable download workflows use <code>resume_from</code>.</li>
+          <li>Search and download workflows stop at their declared case/page/runtime bounds. Cited-by is the deliberate exception: it is exhaustive and resumable, with time slices controlling one invocation but never truncating the logical job.</li>
+          <li>A summary run uses at most six model calls per case by default and never more than twelve. If <code>summarize=true</code>, the bulk hard limit is 100 cases and preflight reports the maximum possible nested calls before navigation.</li>
+          <li>The workflow runtime budget includes browser and nested-model time. If it expires after downloads finish, unstarted summary jobs remain <code>pending</code> in the manifest rather than being mislabeled failed.</li>
+          <li>When a cited-by provider exposes a reliable total, progress reports projected pages before enumeration. Otherwise the total remains unknown and progress reports completed pages/cursors without fabricating a denominator.</li>
+          <li>Ordinary paged responses return <code>completion: "exhausted" | "capped" | "partial_failure" | "cancelled"</code>. Cited-by returns <code>"exhausted" | "paused" | "blocked" | "partial_failure" | "cancelled"</code> per provider and for the merged job. Only <code>exhausted</code> means every result exposed by every selected provider was traversed. Even then, the public report says <code>provider_corpus_complete: true</code> and <code>universe_complete: "not_claimed"</code>.</li>
+        </ul>
+
+        <h3>Compatibility decision</h3>
+        <p>
+          Ship deprecated wrappers for the eight existing CourtListener/Scholar tool names for one release cycle.
+          Each wrapper validates the legacy parameters, translates them into the new engine, and emits a deprecation notice.
+          Remove the aliases only in the next documented breaking release. This preserves existing prompts and sessions while
+          making the migration decision now rather than after the port.
+        </p>
+      </section>
+
+      <section id="architecture">
+        <h2>Internal architecture of the single extension</h2>
+        <div class="two-col">
+          <div class="card">
+            <b>Public layer</b>
+            Validates the mode union, normalizes page semantics, selects providers, emits consistent progress, and formats results.
+          </div>
+          <div class="card">
+            <b>Workflow engine</b>
+            Implements the four state machines, concurrent Scholar/CourtListener discovery lanes, exhaustive time-sliced cited-by jobs, bounded download work, cancellation, retry policy, manifest checkpoints, and provider-specific resume cursors.
+          </div>
+          <div class="card">
+            <b>Provider adapters</b>
+            Separate two discovery adapters from four document adapters, with URL allowlists, exact identity resolution, opinion extraction, and source IDs.
+          </div>
+          <div class="card">
+            <b>Shared browser runtime</b>
+            Owns Chrome/CDP, source-marked tabs, independent per-provider pacing, leases, cache, verification alerts, Back navigation, and cleanup.
+          </div>
+          <div class="card">
+            <b>Case identity service</b>
+            Normalizes names/citations/dockets and merges the same case across providers without discarding provenance.
+          </div>
+          <div class="card">
+            <b>Archive service</b>
+            Saves unmodified opinion HTML for Stage 2, lightweight cited-by HTML/JSON reports for Stage 1, normalized sidecars, validation records, manifests, failures, stable folder assignments, and restart positions atomically.
+          </div>
+          <div class="card">
+            <b>Summary service</b>
+            Queues post-download enrichment, calls the selected Pi model in an isolated context, validates source-segment references, renders <code>case.md</code>, records usage, and resumes independently from downloads.
+          </div>
+          <div class="card">
+            <b>Case-check service</b>
+            Creates a proposition-specific Stage 2 record, verifies submitted quotations against the downloaded opinion, records authorized external citator findings, and keeps discovery, reading, citation-graph, and citator states distinct.
+          </div>
+        </div>
+
+        <h3>Provider interfaces</h3>
+        <pre><code>interface LegalDocumentAdapter {
+  id: ProviderId;
+  capabilities: {
+    exactLookup: true;
+    download: true;
+    read: true;
+  };
+  allowedHosts: readonly string[];
+
+  resolveExact(ctx, identity, lookupBudget): Promise&lt;ResolvedProviderCase&gt;;
+  openOpinion(ctx, resolved): Promise&lt;CapturedOpinion&gt;;
+  extractOpinion(page): OpinionDocument;
+}
+
+interface LegalDiscoveryAdapter extends LegalDocumentAdapter {
+  id: DiscoveryProviderId;
+  discoveryCapabilities: {
+    generalSearch: true;
+    citedBy: "native";
+    filters: {
+      court: "native" | "post_filter" | "unsupported";
+      yearRange: "native" | "post_filter" | "unsupported";
+      exactFiledDate: "native" | "post_filter" | "unsupported";
+    };
+  };
+
+  preflightDiscovery(request): CapabilityDecision;
+  submitSearch(ctx, request): Promise&lt;CapturedSearchPage&gt;;
+  parseResults(page): NormalizedCase[];
+  hasNext(page): boolean;
+  clickNext(ctx, tab): Promise&lt;CapturedSearchPage&gt;;
+  restoreResults(ctx, tab): Promise&lt;CapturedSearchPage&gt;;
+  estimateCitedBy(ctx, seed): Promise&lt;CitationEstimate&gt;;
+  citedBy(ctx, seed, cursor): AsyncIterable&lt;CitationPage&gt;;
+}</code></pre>
+
+        <p>
+          Discovery adapters own result/citation cursors and serialize them into the manifest; the workflow never assumes
+          that both sources can be represented by one page number. A citation page carries its next cursor, observed total when
+          available, provider access ceiling, partition identity, terminal evidence, and normalized lightweight cases,
+          allowing the engine to checkpoint before any next-page navigation. Parsing a citation page must never invoke
+          <code>openOpinion</code>.
+        </p>
+        <p>
+          Combined discovery uses a two-lane page barrier: Scholar and CourtListener navigate concurrently, each under
+          its own profile, rate limiter, timeout, and abort signal. The merge starts only when the current wave settles.
+          Scholar's rank is considered first, then CourtListener's, alternating thereafter; the next wave is not launched
+          until the current merged results and both next cursors are checkpointed.
+        </p>
+        <p>
+          <code>OpinionDocument</code> must expose normalized text as deterministic, ordered source segments in addition
+          to metadata and raw HTML. Segment IDs are derived from the source-text hash and ordinal, so summary evidence
+          links remain stable across retries and cannot accidentally point into another case.
+        </p>
+
+        <h3>Pi-native model-call boundary</h3>
+        <p>
+          The summary worker calls <code>ctx.modelRegistry.complete</code> directly with a fresh, case-only message
+          context. It does not inject a prompt into the main conversation, start another agent turn, or expose legal
+          research tools to the nested completion. Use the active model by default, honor session model scoping,
+          require configured authentication, pass cancellation through, set cache retention to none, and assign a fresh
+          nested session ID. Aggregate every nested response's usage and return it on the parent tool result so Pi's
+          session totals remain accurate.
+        </p>
+
+        <h3>Source-specific implementation notes</h3>
+        <ul>
+          <li><strong>CourtListener:</strong> port the existing selectors and <code>cites:(id)</code> flow; retain canonical cluster URLs learned during search. For complete-within-source cited-by enumeration, prefer the current cursor-paginated citation API or authorized bulk citation data over fragile result-page traversal, and run until the terminal cursor.</li>
+          <li><strong>Scholar:</strong> port the existing rendered form, case link, Back, Next, CAPTCHA, and 1,000-result-per-query ceiling logic. Where current access rules permit, partition a cited-by set deterministically by supported court/year constraints until every reachable shard is below the ceiling; persist the partition tree. A blocked, unpartitionable, or unexhausted shard makes Scholar incomplete—never bypass verification or access controls.</li>
+          <li><strong>FindLaw:</strong> do not implement general Cludo paging. Accept allowlisted direct opinion URLs, or submit one exact citation/title lookup and inspect no more than <code>max_lookup_pages</code> for a confidence-gated match. Extract opinion text from <code>#caselaw-content</code>.</li>
+          <li><strong>Justia:</strong> do not expose Google Custom Search as general discovery. Accept allowlisted direct opinion URLs, or use its search only for a bounded exact-case resolution. Support both state/federal pages with <code>#opinion</code> and Supreme Court pages with <code>#opinions</code>/<code>#tab-opinion-*</code>.</li>
+        </ul>
+        <p class="small">
+          Preserve the existing CourtListener and Scholar Chrome profile directories during migration so cookies and
+          verification state are not silently discarded. One runtime may attach to both, but profile movement or
+          consolidation is a separate, opt-in migration—not a prerequisite for the unified extension.
+        </p>
+      </section>
+
+      <section id="matching">
+        <h2>Cross-source identity and exact-case matching</h2>
+        <p>A normalized result should retain every provider's provenance while presenting one common shape:</p>
+        <pre><code>type NormalizedCase = {
+  canonicalKey: string;
+  title: string;
+  citations: string[];
+  normalizedCitations: Array&lt;{ volume: string; reporter: string; page: string }&gt;;
+  court?: string;
+  dateFiled?: string;
+  year?: string;
+  docketNumber?: string;
+  snippet?: string;
+  snippetSource?: DiscoveryProviderId;
+  discoveredBy?: Array&lt;{
+    method: "search" | "cited_by";
+    provider: DiscoveryProviderId;
+    seedCanonicalKey?: string;
+    providerRank?: number;
+  }&gt;;
+  sources: Array&lt;{
+    provider: ProviderId;
+    providerId?: string;
+    citedById?: string;
+    url: string;
+    sourceRank?: number;
+  }&gt;;
+};</code></pre>
+
+        <h3>Deduplication rules</h3>
+        <ol>
+          <li>Parse every reporter citation into a set of <code>volume + canonical reporter + page</code> tuples. Canonicalize punctuation, Unicode/ordinary spaces, and known reporter aliases such as <code>U. S.</code> and <code>U.S.</code>.</li>
+          <li>Merge when the two citation sets have <em>any</em> exact tuple in common, not only when providers display the same lead citation. This handles parallel citations such as U.S., S. Ct., and L. Ed.</li>
+          <li>Normalized court + docket number + decision date.</li>
+          <li>Normalized case name + court + year.</li>
+          <li>Provider ID or canonical URL only as a within-provider fallback.</li>
+        </ol>
+        <p class="small">
+          Before a merge, reject contradictory court, year, docket, or normalized title evidence. Ambiguous records remain
+          separate and are marked for review; a weak title match never overrides conflicting structured metadata. The first
+          assigned <code>canonicalKey</code> and folder assignment remain stable for the life of the session.
+        </p>
+
+        <h3>Cited-by seed resolution</h3>
+        <ol>
+          <li>Normalize the supplied URL, provider ID, citation, docket, or query into portable identity evidence.</li>
+          <li>Resolve that evidence independently in every selected citation-discovery provider. A CourtListener ID is never passed to Scholar, or vice versa.</li>
+          <li>Expand the seed to every known parallel citation and provider opinion identity. Apply the same exact-match gate used by direct download and persist each resolved provider ID plus its evidence in the manifest.</li>
+          <li>Enumerate every successfully resolved graph identity with its own cursor or partition queue. Merge duplicate citation edges without discarding which seed identity and provider produced each edge.</li>
+          <li>Continue until every selected provider reaches a recorded terminal condition. A time slice produces a resumable <code>paused</code> job; a CAPTCHA, access failure, unsafe resolution, or unexhausted Scholar partition produces <code>blocked</code>/<code>partial_failure</code>, never a false complete report.</li>
+        </ol>
+        <div class="callout warning">
+          <p><strong>Meaning of complete:</strong> <code>cited_by</code> defaults to CourtListener and Scholar, runs both lanes concurrently, uses Scholar's record/blurb first for duplicates, and uses CourtListener as the principal exhaustive cursor stream. There is no result cap. “Complete” means every result exposed by each successfully enabled provider was traversed as of the recorded time. Google limits one Scholar query to 1,000 visible results, offers no bulk access, and does not warrant completeness; CourtListener also documents gaps that can affect its citation graph. The extension therefore reports <code>provider_corpus_complete</code> and always leaves <code>universe_complete</code> unclaimed.</p>
+        </div>
+
+        <h3>Stage 1 report and Stage 2 promotion</h3>
+        <p>
+          Citation discovery and opinion retrieval are separate operations. The cited-by job saves only the normalized list
+          and the provider-supplied result blurbs; it never performs a document lookup. When the user selects an entry for
+          Stage 2, a separate <code>direct_download</code> call uses its already-resolved citation, docket, court, year, title,
+          and provider URL. That call may then use FindLaw/Justia as bounded exact mirrors and may opt into <code>case.md</code>.
+          This prevents exhaustive citation enumeration from multiplying into cases-by-document-providers downloads or
+          thousands of model calls.
+        </p>
+
+        <h3>Direct-download confidence gate</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Evidence</th><th>Suggested weight</th><th>Reason</th></tr></thead>
+            <tbody>
+              <tr><td>Any exact normalized reporter citation overlap</td><td>100</td><td>Strongest portable identifier across providers, including parallel citations.</td></tr>
+              <tr><td>Exact docket + compatible court</td><td>90</td><td>Strong when a reporter citation is unavailable.</td></tr>
+              <tr><td>Exact normalized title + court + year</td><td>80</td><td>Good fallback, but party names can collide.</td></tr>
+              <tr><td>Exact title + year only</td><td>65</td><td>Candidate, not enough for unattended download.</td></tr>
+              <tr><td>Snippet or fuzzy title only</td><td>Below gate</td><td>Return for user selection; do not download.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Auto-download only when the leading candidate scores at least 80 and exceeds the runner-up by a configured margin.
+          A validated provider URL may bypass search, but it must remain within that adapter's exact host/path allowlist.
+        </p>
+      </section>
+
+      <section id="storage">
+        <h2>Downloads, provenance, and recovery</h2>
+        <p>
+          Use one session folder per run. The public resume token is the path to its manifest; provider identity and
+          cursor shapes stay inside that versioned file rather than being squeezed into one global page/result pair.
+        </p>
+        <pre><code>session-folder/
+  _legal-research-manifest.json
+  reports/
+    cited-by--miranda-v-arizona--a13f2c8d.html
+    cited-by--miranda-v-arizona--a13f2c8d.json
+  cases/
+    miranda-v-arizona--a13f2c8d/
+      courtlistener.html
+      findlaw.html
+      justia.html
+      case.md
+      normalized.json
+      validation.json
+  failures/
+    page-003-result-007.json</code></pre>
+        <pre><code>type SessionManifest = {
+  schemaVersion: 2;
+  requestFingerprint: string;
+  discoveryProviders: Partial&lt;Record&lt;DiscoveryProviderId, {
+    status: "pending" | "running" | "exhausted" | "failed";
+    nextCursor: unknown;        // opaque adapter-owned JSON
+    pagesInspected: number;
+    resultsInspected: number;
+  }&gt;&gt;;
+  documentLookups: Partial&lt;Record&lt;ProviderId, {
+    attempted: number;
+    matched: number;
+    failed: number;
+  }&gt;&gt;;
+  resolvedCitationSeeds: Partial&lt;Record&lt;CitationProviderId, ResolvedProviderCase&gt;&gt;;
+  citedByJobs: Array&lt;{
+    seedCanonicalKey: string;
+    asOf: string;
+    status: "pending" | "running" | "paused" | "exhausted" | "blocked" | "partial_failure" | "cancelled";
+    providers: Partial&lt;Record&lt;CitationProviderId, {
+      status: "pending" | "running" | "paused" | "exhausted" | "blocked" | "failed";
+      nextCursor?: unknown;
+      pendingPartitions?: unknown[];
+      completedPartitions: number;
+      pagesInspected: number;
+      rawResults: number;
+      terminalEvidence?: string;
+      error?: string;
+    }&gt;&gt;;
+    uniqueCases: number;
+    reportHtml?: string;
+    reportJson?: string;
+    providerCorpusComplete: boolean;
+    universeComplete: "not_claimed";
+  }&gt;;
+  downloadQueue: Array&lt;{ canonicalKey: string; status: string }&gt;;
+  summaryJobs: Array&lt;{
+    canonicalKey: string;
+    sourceHash: string;
+    status: "pending" | "running" | "complete" | "failed";
+    attempts: number;
+    model?: string;
+    promptVersion: number;
+    usage?: unknown;
+    error?: string;
+  }&gt;;
+  completedCanonicalKeys: string[];
+  folderAssignments: Record&lt;string, string&gt;;
+  caseChecks: Array&lt;{
+    canonicalKey: string;
+    proposition: string;
+    opinionReviewed: boolean;
+    citationGraphReviewed: boolean;
+    citatorProvider?: string;
+    citatorCheckedAt?: string;
+    decision: "accepted" | "qualified" | "rejected" | "undecided";
+  }&gt;;
+};</code></pre>
+        <ul>
+          <li>Save the rendered HTML bytes without injecting metadata or cleanup, plus a separate normalized JSON record. Hash the exact saved HTML bytes.</li>
+          <li>Record schema version, request fingerprint, query, mode, provider set, source URL/ID, retrieval time, match evidence, provider cursor, completeness marker, and content hash.</li>
+          <li>Use atomic writes for every checkpoint and collision-safe file names.</li>
+          <li>Resolve every relative destination from <code>ctx.cwd</code>; reject empty paths and keep this behavior identical across modes.</li>
+          <li>When omitted, <code>save_path</code> defaults to <code>legal-research-downloads</code> under <code>ctx.cwd</code>; the session name defaults to a sanitized mode plus UTC timestamp.</li>
+          <li>Track <code>saved</code>, <code>skipped</code>, <code>failed</code>, the pending download queue, each discovery provider's <code>nextCursor</code>, and exact document-lookup counts separately.</li>
+          <li>Write cited-by JSON incrementally from normalized result cards, then render the human-readable HTML report deterministically from that JSON. Its header records seed identity, as-of time, provider status, raw/unique/duplicate counts, full opinions downloaded (<code>0</code>), and LLM calls (<code>0</code>).</li>
+          <li>Each cited-by report entry contains only case name, citation set, court/date, provider-supplied blurb or the explicit missing-blurb marker, provider links/IDs, and citation-edge provenance. Raw opinion HTML is not part of this job.</li>
+          <li>Freeze each canonical key's folder assignment on first discovery. A slug plus stable key hash avoids order-dependent numbered folders.</li>
+          <li>On resume, validate the manifest version and request/source fingerprint, then load completed canonical keys and provider cursors so saved cases are neither downloaded nor counted twice.</li>
+          <li>For a cross-source case, permit multiple source HTML files while counting one normalized case.</li>
+          <li>Track download and summary status separately. A summary failure never deletes the HTML or changes a completed download to failed; it leaves a retryable <code>summaryJobs</code> entry.</li>
+          <li>Track discovered, downloaded, opinion-reviewed, citation-graph-reviewed, and external-citator-checked as separate states. Only <code>legal_record_case_check</code> may persist an external citator provider/time/treatment, and it does so per proposition rather than declaring an entire case universally valid.</li>
+          <li>Regenerate <code>case.md</code> only when it is missing, its recorded source hash differs, its selected model changed, or its prompt version changed. Resume does not pay for an identical completed summary twice; a stale <code>running</code> job is reset to <code>pending</code> after an interrupted process.</li>
+        </ul>
+        <div class="callout">
+          <p><strong>Resume invariant:</strong> for every provider, Scholar partition, and download queue, the manifest's next cursor identifies the first unit of work not known to be complete. Persist the current result page and its normalized entries before navigation, then atomically advance the cursor only after the report/checkpoint write succeeds. A time-slice exit is <code>paused</code>; only terminal-cursor evidence can produce <code>exhausted</code>.</p>
+        </div>
+      </section>
+
+      <section id="summaries">
+        <h2>Optional AI Markdown case briefs</h2>
+        <div class="callout warning">
+          <p><strong>Consent and authority:</strong> <code>summarize=false</code> is the default. Enabling it explicitly sends extracted opinion text to the selected configured model provider and may incur model charges. The saved provider HTML remains the source artifact; <code>case.md</code> is labeled AI-generated research assistance, not an official opinion, court syllabus, or legal advice.</p>
+        </div>
+        <div class="callout success">
+          <p><strong>Stage boundary:</strong> cited-by reports never enter this pipeline. They use provider-supplied result blurbs only and make zero model calls. Summarization becomes available only after an ordinary search result or selected cited-by entry is explicitly downloaded in Stage 2.</p>
+        </div>
+
+        <h3>Post-download pipeline</h3>
+        <div class="flow"><span>Save and hash HTML</span><i>→</i><span>Checkpoint download</span><i>→</i><span>Extract source segments</span><i>→</i><span>Queue one summary job</span><i>→</i><span>Call Pi model</span><i>→</i><span>Validate evidence</span><i>→</i><span>Atomically write case.md</span></div>
+        <ol>
+          <li>The raw opinion and normalized metadata are saved successfully before any model call. Search-tab restoration and the provider cursor are not held open by summarization.</li>
+          <li>A single-worker enrichment queue may run alongside later browser navigation, but the parent tool awaits or checkpoints every queued job before returning.</li>
+          <li>Each job receives only one case's metadata and numbered opinion segments. It has no research tools and no conversation history, preventing recursive tool calls and cross-case contamination.</li>
+          <li>Success, failure, model usage, and retry state are recorded independently. Cancellation leaves the first unfinished summary job pending for manifest resume.</li>
+        </ol>
+
+        <h3><code>case.md</code> contract</h3>
+        <pre><code>---
+title: "Miranda v. Arizona"
+canonical_key: "..."
+source_url: "https://..."
+source_sha256: "..."
+ai_generated: true
+summary_model: "provider/model"
+summary_prompt_version: 1
+generated_at: "2026-08-26T...Z"
+---
+
+# Miranda v. Arizona
+
+&gt; AI-generated research aid. Verify every proposition against the opinion.
+
+## Case metadata
+## AI-generated case brief
+### Overview
+### Facts
+### Procedural posture
+### Questions presented
+### Holdings
+### Reasoning
+### Rule and disposition
+### Separate opinions
+### Limits and uncertainties
+### Key supporting passages
+
+## Extracted opinion text
+&lt;a id="source-s0001"&gt;&lt;/a&gt;
+**[S0001]** ...</code></pre>
+        <ul>
+          <li>Create one canonical <code>case.md</code> per normalized case, even when multiple provider HTML copies exist. Record which source copy supplied the text.</li>
+          <li>Render front matter and headings deterministically from validated data; do not write the model's free-form Markdown directly to disk.</li>
+          <li>Every material summary field carries one or more links to valid <code>S####</code> source segments. Any quoted passage must be an exact substring of those segments.</li>
+          <li>Include the full extracted opinion after the brief so the Markdown remains useful without replacing the source HTML as the authoritative archive.</li>
+        </ul>
+
+        <h3>Grounding and validation</h3>
+        <p>
+          Ask the model for a versioned JSON case-brief object containing overview, facts, procedural posture, issues,
+          holdings, reasoning, rule, disposition, separate opinions, uncertainties, key passages, and supporting segment
+          IDs. The prompt treats opinion text as quoted untrusted data and explicitly forbids following instructions found
+          inside it. Validate the JSON shape, all segment IDs, exact quotations, case identity, and maximum field lengths.
+          Allow at most one repair call for invalid structure; otherwise preserve the download and mark the summary failed.
+        </p>
+
+        <h3>Long opinions and cost bounds</h3>
+        <ul>
+          <li>If the complete opinion fits within 65% of the selected model's context window, use one case-brief call.</li>
+          <li>Otherwise summarize ordered, non-overlapping segment groups and perform one final synthesis from the grounded intermediate records. Original segment IDs survive both stages.</li>
+          <li>Default to six nested calls per case and enforce an absolute maximum of twelve, including a possible repair call. A case that cannot fit within that budget is marked <code>summary_failed</code>; its download remains complete.</li>
+          <li>When summarization is enabled, bulk workflows permit at most 100 downloaded cases. Preflight reports selected provider/model, cases requested, typical one-call cost shape, and the worst-case nested-call count.</li>
+          <li>The final workflow result reports <code>downloaded</code>, <code>summarized</code>, <code>summary_failed</code>, and <code>summary_pending</code> separately, together with aggregate input/output tokens and model usage returned to Pi.</li>
+        </ul>
+      </section>
+
+      <section id="delivery">
+        <h2>Implementation sequence</h2>
+        <div class="phase">
+          <div class="phase-num">Phase 0</div>
+          <div><h3>Pass access and contract gates</h3><p>Review each provider's current terms, robots directives, API/bulk-data permissions, access restrictions, and acceptable request rates before collecting fixtures or implementing automation; record allowed paths and stop conditions. Use a flat enum-driven Pi schema with mode-specific preflight validation so the contract does not depend on <code>anyOf</code> rendering. Freeze the two-stage boundary, exhaustive cited-by completion vocabulary, time-slice/resume rules, source strategy, and profile-retention policy.</p></div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">Phase 1</div>
+          <div><h3>Freeze behavior with allowed fixtures</h3><p>Where the access gate permits it, capture representative search, no-result, opinion, verification, pagination, filter, cited-by first/middle/terminal pages, missing-blurb cards, and Scholar partition-boundary behavior for the current CourtListener and Scholar extensions. Add characterization tests before moving code. Store fixtures as test data only and document their capture date.</p></div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">Phase 2</div>
+          <div><h3>Extract the shared runtime</h3><p>Move CDP/API transport, Chrome lifecycle, abort handling, queues, tab leases, timing, atomic writes, progress events, and archive helpers behind internal interfaces. Add independent Scholar/CourtListener lanes, deterministic page-wave barriers, cited-by cursor/partition queues, and time-slice checkpoints while preserving each provider's pacing and access rules. Normalize path semantics and public result types. Add the isolated Pi model-call wrapper, single-worker summary queue, source-segment builder, validated Markdown renderer, and nested-usage accumulator.</p></div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">Phase 3</div>
+          <div><h3>Port CourtListener and Scholar without regression</h3><p>Implement both adapters, all four workflows, metadata-only cited-by entries, deterministic HTML/JSON cited-by reports, <code>legal_read_case</code> chunk continuation, <code>legal_record_case_check</code>, browser handoff, per-provider manifest cursors, optional post-download <code>case.md</code> generation, and the decided one-release compatibility wrappers. Reuse the existing profile directories; do not require profile migration.</p></div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">Phase 4</div>
+          <div><h3>Add FindLaw as a document adapter</h3><p>Implement direct-URL validation, tightly bounded exact-case lookup, confidence scoring, opinion extraction and stable source segments from <code>#caselaw-content</code>, and exact/no-match/ambiguous fixtures. Do not expose Cludo pagination as general search.</p></div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">Phase 5</div>
+          <div><h3>Add Justia as a document adapter</h3><p>Implement direct-URL validation, bounded exact-case resolution restricted to supported opinion URL families, and stable source-segment extraction from both general and Supreme Court opinion layouts. Do not expose Custom Search pagination as general discovery.</p></div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">Phase 6</div>
+          <div><h3>Complete exhaustive cross-source cited-by reporting</h3><p>Resolve every seed identity independently in CourtListener/Scholar, estimate workloads, enumerate every permitted cursor/partition without a result cap, checkpoint before navigation, merge on overlapping normalized citation sets, and prove that no opinion adapter or model call runs. A selected report entry moves to Stage 2 through a separate direct download; only that later operation may use FindLaw/Justia as exact alternative opinions.</p></div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">Phase 7</div>
+          <div><h3>Package, migrate, and observe</h3><p>Bundle one extension entry point, publish the compatibility/removal schedule, document the two stages, provider-corpus completeness language, time-slice resume, external-citator recording, and summary consent/cost/model behavior. Add structured diagnostics and migration notes, repeat the access review, and run conservative opt-in live smoke tests.</p></div>
+        </div>
+      </section>
+
+      <section id="testing">
+        <h2>Test plan and acceptance criteria</h2>
+        <h3>Automated tests</h3>
+        <ul class="checklist">
+          <li>The selected Pi schema shape renders clear mode-specific fields and rejects mixed modes, multiple selector kinds, provider IDs without providers, and <code>auto</code> combined with explicit providers.</li>
+          <li>The schema rejects FindLaw/Justia inside every <code>DiscoverySelection</code>, but accepts them in <code>DocumentSelection</code> and direct provider selectors.</li>
+          <li>The schema rejects <code>summarize</code> on <code>search</code>, <code>summary_model</code> without <code>summarize=true</code>, and every download, document-source, mirror, opinion, and model field on <code>cited_by</code>.</li>
+          <li>With <code>summarize=false</code> or omitted, no nested model call occurs and no <code>case.md</code> is created.</li>
+          <li>Summary preflight selects the active or requested session-allowed model, verifies configured authentication, and fails before browser navigation when the model cannot be used.</li>
+          <li>Discovery <code>auto</code> uses Scholar then CourtListener; ordered <code>fallback</code> and concurrent deterministic <code>combine</code> never call FindLaw/Justia and preserve discovery rank.</li>
+          <li>Deferred-provider tests prove that combined mode launches Scholar and CourtListener before either finishes, waits for the page barrier, and returns the same Scholar-first merge regardless of response order.</li>
+          <li>A timeout, CAPTCHA, or layout failure in one combined lane is recorded as partial coverage without discarding the other lane's results or cursor; cancellation aborts both.</li>
+          <li>Document <code>discovery</code>, <code>fallback</code>, and <code>all_available</code> routing perform only exact identity lookups, enforce the confidence gate, and charge alternative providers to the mirror budget.</li>
+          <li>Unsupported filters fail during preflight, native filters are transmitted, and post-filters report inspected and dropped counts without opening opinions in <code>search</code>.</li>
+          <li>Every CourtListener/Scholar discovery fixture parses exactly the rendered result-card count or fails closed with a layout-change error.</li>
+          <li>FindLaw/Justia adapters expose no general-search or cited-by method; their exact-lookup fixtures cover direct URL, unique citation match, no match, ambiguity, and lookup-page exhaustion.</li>
+          <li>No-results, blocked, CAPTCHA/verification, alert, and unexpected-page fixtures are distinguished.</li>
+          <li>Each Next action proves both page identity and content changed; repeated/cyclic pages stop safely.</li>
+          <li><code>search</code> never calls an opinion-opening adapter method.</li>
+          <li><code>search_download</code> restores the same result page before continuing and stops at case, page, and runtime budgets.</li>
+          <li><code>cited_by</code> resolves all known parallel seed identities and separate provider IDs, reports estimates/access ceilings, maintains independent cursors and Scholar partition queues, merges any overlapping normalized parallel citation, and has no result/page cap.</li>
+          <li>First, middle, and terminal cited-by fixtures prove that every result card becomes exactly one normalized list entry or a documented duplicate, the next cursor advances only after checkpoint, and only terminal evidence produces <code>exhausted</code>.</li>
+          <li>A cited-by time-slice exit returns <code>paused</code>, preserves the first uncompleted cursor/partition, and resumes without gaps or duplicate report entries. A CAPTCHA, blocked partition, layout failure, or unsafe seed resolution can never be reported as complete.</li>
+          <li>The cited-by adapter never calls <code>openOpinion</code>, any document resolver, or <code>ctx.modelRegistry.complete</code>; its report shows full opinions downloaded and LLM calls as zero.</li>
+          <li>The cited-by HTML and JSON contain case name, citation set, court/date, provider blurb or missing marker, source links/IDs, and edge provenance. Scholar's blurb wins for duplicates when present while every provider's raw blurb remains in JSON provenance.</li>
+          <li>Cross-provider retrieval never exceeds <code>max_mirror_lookups</code>; its default of zero cannot cause hidden searches.</li>
+          <li><code>direct_download</code> saves one unique match and refuses tied/low-confidence candidates.</li>
+          <li><code>legal_read_case</code> returns stable 12,000-character chunks with an exact next offset and reaches an unambiguous end-of-document state.</li>
+          <li><code>legal_record_case_check</code> records a review per proposition, verifies submitted quotations against the downloaded opinion when available, leaves omitted citator work visibly unchecked, and never converts free cited-by completion into a “good law” status.</li>
+          <li>Cancellation at every await point produces a valid manifest whose independent cursors and pending queue resume at the first incomplete unit.</li>
+          <li>Folder assignments stay stable when discovery order changes, and completed canonical keys are not re-counted on resume.</li>
+          <li>Relative paths resolve from a mocked <code>ctx.cwd</code> for all providers and all modes.</li>
+          <li>The saved HTML hash matches the exact unmodified bytes; metadata appears only in the JSON sidecar.</li>
+          <li>A successful summary produces one deterministic <code>case.md</code> whose source hash, model, prompt version, and generated time match the manifest.</li>
+          <li>Every summary segment link exists in that case's extracted opinion; every quoted passage is exact; malformed or hallucinated references fail validation.</li>
+          <li>Opinion text containing prompt injection cannot alter the requested JSON contract, select tools, change files, or leak into another case's isolated model context.</li>
+          <li>Long-opinion map/reduce preserves original segment IDs and obeys the per-case model-call ceiling, including its single repair attempt.</li>
+          <li>Model timeout, refusal, invalid JSON, context overflow, cancellation, and exhausted call budget preserve the completed HTML and record a retryable summary outcome.</li>
+          <li>Resume skips summaries whose source hash and prompt version still match, retries pending/failed jobs, and regenerates stale Markdown atomically.</li>
+          <li>Nested model usage is aggregated across chunk, synthesis, and repair calls and returned on the Pi tool result.</li>
+          <li>Each legacy wrapper translates parameters correctly and emits the documented deprecation notice.</li>
+          <li>Source HTML containing prompt-like or hostile text remains untrusted data and cannot change tool control flow.</li>
+        </ul>
+
+        <h3>Live smoke tests</h3>
+        <p>Run only behind an explicit environment flag and at low volume:</p>
+        <ol>
+          <li>One-page search through CourtListener and Scholar for a stable landmark case.</li>
+          <li>Two-page result-only navigation through CourtListener and Scholar.</li>
+          <li>One opinion download per provider.</li>
+          <li>One exact mirror lookup each in FindLaw and Justia, with proof that neither receives the original broad query.</li>
+          <li>One small cited-by run through CourtListener and Scholar that reaches a real terminal cursor/page and produces a metadata-only report; larger exhaustion/partition behavior stays fixture-driven unless separately authorized.</li>
+          <li>One exact-case direct download, plus one intentionally ambiguous query that must refuse to choose.</li>
+          <li>Two consecutive <code>legal_read_case</code> chunks whose offsets join without a gap or overlap.</li>
+          <li>One proposition-specific case-check record with an exact verified quote and one record that remains explicitly not citator-checked.</li>
+          <li>One short opinion summarized in a single call and, behind a separate cost-bearing flag, one long-opinion hierarchical summary.</li>
+        </ol>
+
+        <h3>Release acceptance</h3>
+        <ul>
+          <li>Pi loads one bundled extension without diagnostics and presents the two-stage workflow, four-mode research schema, reading, case-check recording, and browser tools clearly.</li>
+          <li>All four workflows use Scholar/CourtListener for discovery; <code>auto</code> prefers Scholar and falls back to CourtListener when Scholar is unavailable or cannot honor a requested capability.</li>
+          <li>Combined discovery runs Scholar and CourtListener concurrently, merges at page barriers with Scholar first, and remains deterministic when their response order changes.</li>
+          <li>FindLaw and Justia work for validated direct URLs, reading, exact opinion lookup, and document download, but never appear as general-search or cited-by providers.</li>
+          <li>No requested filter is silently ignored. Search/download operations retain explicit case/page/runtime ceilings; cited-by alone uses no result cap and instead runs as a checkpointed, resumable, time-sliced job until every enabled provider exhausts or records a blocking failure.</li>
+          <li>Every completed download is traceable to a source URL and manifest record.</li>
+          <li>A stopped multi-provider run resumes each provider and its download queue without overwriting or recounting completed cases.</li>
+          <li>A cited-by run can enumerate beyond 1,000 merged candidates without opening or downloading an opinion, and a stop/resume cycle produces the same normalized report as an uninterrupted fixture run.</li>
+          <li>Chunked opinion reading remains available for CourtListener and Scholar and is implemented for FindLaw and Justia.</li>
+          <li>Enabling summaries creates one evidence-linked <code>case.md</code> per successfully summarized canonical case, while disabling summaries makes zero nested calls.</li>
+          <li>A summary failure never corrupts, deletes, or downgrades a completed source download, and the manifest can resume the enrichment independently.</li>
+          <li>Pi reports the selected summary model and all nested usage in the workflow result and session accounting.</li>
+          <li>User-facing cited-by output reports the seed, selected providers, as-of time, provider status, partitions/cursors, raw/unique/duplicate counts, and completion basis. It says “retrieval complete for the selected provider corpus” only after every selected graph is exhausted, always says <code>universe_complete: not_claimed</code>, and states exactly why paused, blocked, cancelled, or failed runs are not complete.</li>
+        </ul>
+      </section>
+
+      <section id="risks">
+        <h2>Risks and safeguards</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Risk</th><th>Impact</th><th>Safeguard</th></tr></thead>
+            <tbody>
+              <tr><td>Provider HTML changes</td><td>Parser returns partial or wrong cases.</td><td>Card-count invariants, fixtures, semantic selectors, and fail-closed errors with captured diagnostics.</td></tr>
+              <tr><td>Weak FindLaw/Justia site search</td><td>Broad searches return noisy or incomplete cases.</td><td>Never use either for discovery; supply portable identity from CourtListener/Scholar, bound exact lookup pages, and refuse ambiguous document matches.</td></tr>
+              <tr><td>Rate limiting or CAPTCHA</td><td>Long runs stop mid-session.</td><td>Per-provider timing, visible browser, audible verification notice, retry ceilings, and atomic resume manifests.</td></tr>
+              <tr><td>Concurrent discovery race</td><td>Fast-provider timing changes ordering or one lane increases pressure on the other.</td><td>Separate profiles and rate limiters, one in-flight page per provider, a page-wave barrier, Scholar-first deterministic merge, and independent failure/cursor state.</td></tr>
+              <tr><td>False cited-by completeness</td><td>Legal research misses later authority or mistakes retrieval for treatment validation.</td><td>Enumerate every enabled provider to terminal evidence, expose every blocked shard/failure, say <code>provider_corpus_complete</code> rather than universal completeness, and keep external-citator status separate.</td></tr>
+              <tr><td>Very large cited-by job</td><td>A landmark case can require hours and outlive one Pi tool invocation.</td><td>No silent cap: use projected counts, time-sliced execution, atomic cursor/partition checkpoints, progress reporting, safe pause/resume, and metadata-only collection with zero opinion downloads/model calls.</td></tr>
+              <tr><td>Mirror-search multiplication</td><td>Each citing case could trigger searches across every document provider.</td><td><code>cited_by</code> has no document-routing capability. Only a separately selected Stage 2 <code>direct_download</code> may perform an explicit, counted mirror lookup.</td></tr>
+              <tr><td>Parallel-citation duplicates or false merges</td><td>Counts are inflated or distinct cases are collapsed.</td><td>Any-overlap citation-set matching with reporter canonicalization, conflict guards, provenance retention, and ambiguity tests.</td></tr>
+              <tr><td>Silently weakened filters</td><td>Results fall outside the requested court or date constraints.</td><td>Provider-level native/post/unsupported declarations, whole-request preflight, fail-closed missing metadata, and filter accounting.</td></tr>
+              <tr><td>Hallucinated case brief</td><td>A researcher relies on a proposition the opinion does not support.</td><td>AI warning, structured output, mandatory source-segment evidence, exact-quote validation, uncertainty fields, and preservation of the complete opinion beneath the brief.</td></tr>
+              <tr><td>Opinion-text prompt injection</td><td>Quoted source text attempts to redirect the summarizer or invoke tools.</td><td>Fresh case-only model context, no nested tools, explicit untrusted-data delimiters, strict JSON validation, and deterministic Markdown rendering.</td></tr>
+              <tr><td>Unexpected model cost or disclosure</td><td>Bulk cases create many paid calls or send text to an unintended provider.</td><td>Default-off toggle, model/auth preflight, 100-case and per-case call ceilings, worst-case call projection, cache retention disabled, and usage accounting.</td></tr>
+              <tr><td>Summary failure blocks archiving</td><td>A transient model problem loses a valid legal download.</td><td>Checkpoint source artifacts first; use independent summary states and retry queues; never roll back completed HTML.</td></tr>
+              <tr><td>Wrong direct-case match</td><td>The wrong opinion is archived or relied on.</td><td>Weighted exact-match gate, runner-up margin, and refusal on ambiguity.</td></tr>
+              <tr><td>Free graph mistaken for Shepardizing</td><td>A citing relationship is treated as proof that a proposition remains good law.</td><td>Distinct graph/citator states, proposition-specific <code>validation.json</code>, explicit reviewer attestation, and no “good law” label from Scholar/CourtListener data or an LLM summary.</td></tr>
+              <tr><td>Ambiguous workflow arguments</td><td>Agents send invalid field combinations.</td><td>One flat enum-driven schema plus strict mode-specific and selector-field preflight validation; no top-level <code>anyOf</code> dependency.</td></tr>
+              <tr><td>Terms/automation constraints</td><td>Provider access or compliance issues.</td><td>Review current terms and robots directives before fixture capture and again before release, honor restrictions, avoid bypasses, and keep request volume conservative.</td></tr>
+              <tr><td>One extension becomes monolithic</td><td>Repairs in one provider destabilize all sources.</td><td>One package/entry point, but separate internal adapters and contract tests.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="sources">
+        <h2>Live pages inspected for this plan</h2>
+        <p class="small">Page structures were checked on 26 August 2026. These are implementation observations, not guarantees of future markup.</p>
+        <p class="small">The FindLaw and Justia search examples remain evidence for their bounded exact-case resolvers; they are not proposed as general discovery sources.</p>
+        <ul>
+          <li><a href="https://caselaw.findlaw.com/">FindLaw Case Law search home</a></li>
+          <li><a href="https://caselaw.findlaw.com/LCsearch.html#?cludoquery=Miranda%20v.%20Arizona&amp;cludoCategory=Caselaw&amp;cludopage=1">FindLaw rendered result-page example</a></li>
+          <li><a href="https://caselaw.findlaw.com/court/us-supreme-court/384/436.html">FindLaw opinion-page example</a></li>
+          <li><a href="https://law.justia.com/">Justia U.S. Law home</a></li>
+          <li><a href="https://law.justia.com/lawsearch?query=Miranda+v.+Arizona">Justia rendered search example</a></li>
+          <li><a href="https://law.justia.com/cases/michigan/supreme-court/1987/78796-5.html">Justia state opinion-page example</a></li>
+          <li><a href="https://supreme.justia.com/cases/federal/us/384/436/">Justia Supreme Court opinion-page example</a></li>
+          <li><a href="https://www.courtlistener.com/">CourtListener</a></li>
+          <li><a href="https://wiki.free.law/c/courtlistener/help/api/rest/v4/citations">CourtListener citation API and citation-graph limitations</a></li>
+          <li><a href="https://scholar.google.com/">Google Scholar</a></li>
+          <li><a href="https://scholar.google.com/intl/en/scholar/help.html">Google Scholar Search Help: 1,000-result limit, bulk-access policy, and coverage disclaimer</a></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    Unified Legal Research Extension Plan · prepared from the local Pi extensions and live provider page inspection
+  </footer>
+</body>
+</html>

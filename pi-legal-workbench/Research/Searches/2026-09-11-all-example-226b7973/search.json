@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "kind": "search",
+  "runId": "2026-09-11-all-example-226b7973",
+  "createdAt": "2026-09-11T20:36:46.314Z",
+  "updatedAt": "2026-09-11T20:36:46.316Z",
+  "fingerprint": "0ae6a4a728d09b0ae7bea91a0ab399288ee7ba07976b0f02e7a74e63f39fbc14",
+  "request": {
+    "searchTerm": "example",
+    "provider": "scholar",
+    "jurisdiction": {
+      "canonical": "all",
+      "kind": "all",
+      "scholarCourts": [],
+      "courtListenerCourts": []
+    },
+    "pagesToSearch": 1,
+    "startPage": 1,
+    "maxCasesToDownload": 0,
+    "runtimeLimitMinutes": 1
+  },
+  "status": "stopped",
+  "completedPages": [],
+  "resultCount": 0,
+  "uniqueCaseCount": 0,
+  "downloads": {},
+  "invocations": [
+    {
+      "startedAt": "2026-09-11T20:36:46.314Z",
+      "request": {
+        "searchTerm": "example",
+        "provider": "scholar",
+        "jurisdiction": {
+          "canonical": "all",
+          "kind": "all",
+          "scholarCourts": [],
+          "courtListenerCourts": []
+        },
+        "pagesToSearch": 1,
+        "startPage": 1,
+        "maxCasesToDownload": 0,
+        "runtimeLimitMinutes": 1
+      }
+    }
+  ],
+  "resumePage": 1,
+  "pagesRemaining": 1,
+  "stopReason": "Runtime limit reached before the next result page.",
+  "providerExhausted": false,
+  "providerPageCapReached": false
+}

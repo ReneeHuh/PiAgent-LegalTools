@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pro Se Legal Tooling — Design Report</title>
+<style>
+  :root {
+    --ink: #1a1d23;
+    --ink-soft: #4a5060;
+    --ink-faint: #7a8090;
+    --paper: #fafaf8;
+    --card: #ffffff;
+    --line: #e3e4e8;
+    --accent: #1f4e79;
+    --accent-soft: #eef3f8;
+    --good: #1e6b3a;
+    --good-bg: #edf6ef;
+    --warn: #8a5a00;
+    --warn-bg: #fdf5e4;
+    --bad: #a02c2c;
+    --bad-bg: #fbeeee;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 28px 80px; }
+  header { border-bottom: 3px double var(--ink); padding-bottom: 20px; margin-bottom: 36px; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: 0.2px; }
+  .subtitle { color: var(--ink-soft); font-size: 15px; margin: 0; }
+  .meta { color: var(--ink-faint); font-size: 13px; margin-top: 10px; font-family: "Segoe UI", system-ui, sans-serif; }
+  h2 {
+    font-size: 21px; margin: 44px 0 14px; color: var(--accent);
+    border-bottom: 1px solid var(--line); padding-bottom: 6px;
+  }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-left: 26px; }
+  li { margin-bottom: 6px; }
+  code {
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.86em;
+    background: #f0f0ee;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .verdict {
+    display: inline-block;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 12px; font-weight: 600;
+    padding: 2px 10px; border-radius: 999px;
+    vertical-align: middle; margin-left: 8px;
+    letter-spacing: 0.3px; text-transform: uppercase;
+  }
+  .v-good  { color: var(--good); background: var(--good-bg); }
+  .v-warn  { color: var(--warn); background: var(--warn-bg); }
+  .v-bad   { color: var(--bad);  background: var(--bad-bg); }
+  .callout {
+    background: var(--accent-soft);
+    border-left: 4px solid var(--accent);
+    padding: 14px 18px; margin: 18px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .callout.warn { background: var(--warn-bg); border-left-color: var(--warn); }
+  .callout.bad  { background: var(--bad-bg);  border-left-color: var(--bad); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .label {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.6px; display: block; margin-bottom: 4px;
+  }
+  .callout.warn .label { color: var(--warn); }
+  .callout.bad .label  { color: var(--bad); }
+  .callout .label { color: var(--accent); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 18px 0;
+    font-family: "Segoe UI", system-ui, sans-serif; font-size: 14px;
+    background: var(--card);
+  }
+  th {
+    text-align: left; background: var(--ink); color: #fff;
+    padding: 9px 12px; font-weight: 600; font-size: 13px;
+  }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 13px; font-weight: 700; margin-right: 8px;
+  }
+  .pipeline {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 18px 20px; margin: 18px 0;
+  }
+  .pipeline .step { display: flex; gap: 12px; margin-bottom: 12px; }
+  .pipeline .step:last-child { margin-bottom: 0; }
+  .pipeline .step-num {
+    flex: 0 0 auto;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+  }
+  .pipeline .step-body { font-size: 14px; }
+  .pipeline .step-body b { display: block; }
+  footer {
+    margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line);
+    color: var(--ink-faint); font-size: 13px;
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Pro Se Legal Tooling — Design Report</h1>
+  <p class="subtitle">Assessment of three proposed tools and recommendations for the broader toolkit</p>
+  <p class="meta">Prepared 2026-08-29 &nbsp;·&nbsp; Workspace: CaseLawSearch &nbsp;·&nbsp; Builds on the 2026-08-28 full review of <code>pi-unified-legal-research</code> v0.16.0</p>
+</header>
+
+<h2>Executive summary</h2>
+<p>Three tools were proposed: (1) a case-law search tool, (2) a multi-try summarization agent with a consolidation step, and (3) a shepardizing tool that downloads a case plus its citing cases and produces an analysis report. The first already exists as the pi extension in this workspace. The second is a good instinct but should be reshaped from "3 tries + merge" into a <strong>draft → audit-against-source → correct</strong> pipeline, most of which is already written as prompts in this folder. The third is worthwhile but depends on <code>legal_cited_by</code>, which has two confirmed bugs that must be fixed first, and its output must be honestly labeled as citation analysis rather than true Shepard's validation.</p>
+<p>Beyond the three proposals, the highest-value additions for pro se litigation are a <strong>quote-and-cite verifier for your own briefs</strong> (reuses the existing audit prompt almost verbatim), a <strong>deadline calculator</strong> (pure code, no LLM, maximally trustworthy), and an <strong>opposing-brief analyzer</strong> (composes tools you already have).</p>
+
+<div class="callout">
+  <span class="label">Recommended build order</span>
+  <p>1.&nbsp;Fix the two <code>legal_cited_by</code> bugs &nbsp;→&nbsp; 2.&nbsp;Brief quote-and-cite verifier &nbsp;→&nbsp; 3.&nbsp;Draft→audit→correct summarizer &nbsp;→&nbsp; 4.&nbsp;Shepardizing report tool &nbsp;→&nbsp; 5.&nbsp;Deadline calculator and remaining utilities.</p>
+</div>
+
+<h2>Tool 1 — Case search <span class="verdict v-good">Already built</span></h2>
+<p>The workspace already ships <code>pi-unified-legal-research</code> (v0.16.0) with five tools — <code>legal_jurisdictions</code>, <code>legal_search</code>, <code>legal_cited_by</code>, <code>direct_download</code>, <code>legal_open_browser</code> — backed by CourtListener and Google Scholar scraper engines, plus a bundled skill. All 69 unit tests pass and the skill's parameter schema exactly matches the code. This tool is done; the work remaining is maintenance, not design.</p>
+<h3>Known issues that affect the other tools</h3>
+<ul>
+  <li><strong>Cited-by ordering bug:</strong> a Google Scholar CAPTCHA pauses the entire run before CourtListener ever starts, and resume re-blocks on Scholar first. There is no way to run CourtListener alone.</li>
+  <li><strong>Cited-by status bug:</strong> single-provider seeds (the normal case) mark the other provider "failed" at creation, so status can never reach "complete" and the resume advice loops forever.</li>
+  <li><strong>Seed gate not enforced:</strong> <code>.download-error-*</code> sidecar files can seed cited-by runs despite the documented "only successfully saved cases" rule.</li>
+  <li><strong>Coverage gap:</strong> no federal district courts in the jurisdiction vocabulary (circuits, SCOTUS, and state appellate only).</li>
+</ul>
+<div class="callout warn">
+  <span class="label">Dependency warning</span>
+  <p>The proposed shepardizing tool sits directly on top of <code>legal_cited_by</code>. Building it before fixing the two cited-by bugs means the shepardizer inherits unreliable, permanently-"incomplete" input. Fix the foundation first.</p>
+</div>
+
+<h2>Tool 2 — Multi-try summarization agent <span class="verdict v-warn">Reshape the design</span></h2>
+<p>The proposal: run a task (e.g., summarize an opinion) three times, then consolidate the tries into a final answer. Running the same prompt N times and voting works well for <em>discrete facts</em> — disposition, dates, which party prevailed — where a majority vote catches a stray hallucination. It works poorly for <em>prose</em>: three stylistically different summaries are hard to merge, the merge step can introduce its own errors, and agreement between tries does not mean correctness, because models tend to fail the same way twice.</p>
+<p>A stronger pattern is already half-built in this folder. <code>summary prompt.txt</code> defines a strict, structured summary format, and <code>summary audit prompt.txt</code> defines a proposition-by-proposition audit of a draft <em>against the saved opinion text</em> with a five-way support classification and a correction table. Auditing against the source catches hallucinations more reliably than comparing drafts to each other.</p>
+<h3>Recommended pipeline</h3>
+<div class="pipeline">
+  <div class="step"><div class="step-num">1</div><div class="step-body"><b>Draft ×2 (parallel)</b>Two independent summaries of the saved opinion using <code>summary prompt.txt</code>.</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body"><b>Audit against source</b>One auditor checks <em>both</em> drafts against the opinion text using <code>summary audit prompt.txt</code>, preferring the draft with fewer classification-(5) unsupported propositions.</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body"><b>Corrected output</b>Final summary in the exact <code>summary prompt.txt</code> format, with the audit's correction table attached as an appendix so every fix is visible and verifiable.</div></div>
+</div>
+<p>This is cheaper than three tries plus consolidation, and the audit step — the part grounded in the actual opinion text — is where the real error-catching happens.</p>
+
+<h2>Tool 3 — Shepardizing / citation analysis <span class="verdict v-warn">Worthwhile, scope it honestly</span></h2>
+<p>The proposal: download a case, download all its citing cases, analyze, and produce a report. The download half already exists (<code>legal_cited_by</code> + <code>direct_download</code>). The genuinely valuable part to build is <strong>treatment classification</strong>: for each citing case, extract the passage that actually discusses the target case, classify the treatment, and aggregate the results into a signal report.</p>
+<h3>Design decisions</h3>
+<ul>
+  <li><strong>Treatment categories:</strong> followed · distinguished · criticized · limited · overruled · cited-in-passing. Aggregate into an overall signal (good law / caution / negative treatment found).</li>
+  <li><strong>One hop only.</strong> Citing-cases-of-citing-cases explodes combinatorially. Cap the run at the target's direct citing cases, optionally trimmed to the top N by court level and recency.</li>
+  <li><strong>Quote the evidence.</strong> The classifier must reproduce, word-for-word with pinpoints, the passage where each citing court discusses the target case — the same discipline the audit prompt already enforces. A treatment label without its supporting quotation is unverifiable and should not appear in the report.</li>
+  <li><strong>Report structure:</strong> target case header → overall signal → negative treatment first (each with quoted passage and court level) → neutral/positive treatment → cases that could not be retrieved or classified, listed explicitly rather than silently dropped.</li>
+</ul>
+<div class="callout bad">
+  <span class="label">Honesty requirement</span>
+  <p>This is <strong>citation analysis, not Shepard's or KeyCite</strong>. CourtListener's citator has real coverage gaps, Google Scholar is CAPTCHA-flaky, and LLM treatment classification makes errors. The single worst failure mode is silently missing the one case that overruled your authority. The report must carry its own disclaimer: <em>"Verify negative treatment on a commercial citator before relying on any authority in a filing."</em> A tool that looks authoritative but has gaps is worse than no tool.</p>
+</div>
+
+<h2>Recommended additional tools for pro se work</h2>
+<p>Ranked by how much each one actually protects you in front of a judge.</p>
+<table>
+  <tr><th style="width:30px">#</th><th style="width:220px">Tool</th><th>What it does and why it ranks here</th></tr>
+  <tr>
+    <td><span class="num">1</span></td>
+    <td><strong>Brief quote-and-cite verifier</strong></td>
+    <td>The audit prompt pointed at <em>your own filings</em>: verify every quotation in a draft brief word-for-word against the saved opinion, flag paraphrases presented as quotes, and check that each citation actually supports the proposition beside it. Misquoted authority is one of the fastest ways a pro se filer loses credibility with a court. Roughly 80% of the prompt is already written — build this before the shepardizer.</td>
+  </tr>
+  <tr>
+    <td><span class="num">2</span></td>
+    <td><strong>Deadline calculator</strong></td>
+    <td>Court-rule deadline computation with counting rules, weekend/holiday adjustments, and service-method extensions. (The summary prompt's "application for leave" / "in lieu of granting leave" language suggests Michigan appellate practice — MCR deadlines are mechanical and unforgiving.) Pure code, no LLM anywhere, which makes it the most trustworthy item on this list.</td>
+  </tr>
+  <tr>
+    <td><span class="num">3</span></td>
+    <td><strong>Opposing-brief analyzer</strong></td>
+    <td>Extract every citation from the other side's brief, run each through the summarizer, and flag where their characterization diverges from what the case actually says. Composes tools 2 and 3 above; this is where the case-law stack pays off most in a live dispute.</td>
+  </tr>
+  <tr>
+    <td><span class="num">4</span></td>
+    <td><strong>Table of authorities &amp; formatting checker</strong></td>
+    <td>Generates the TOA and checks page limits, caption, and proof of service against local rules. Tedious, mechanical, and courts bounce filings over exactly this.</td>
+  </tr>
+  <tr>
+    <td><span class="num">5</span></td>
+    <td><strong>Statute &amp; court-rule lookup</strong></td>
+    <td>The current stack is case-law only, but half of what a real brief cites is statutes and rules. Even a simple fetch-and-cache tool for statute/MCR text rounds out the corpus.</td>
+  </tr>
+</table>
+
+<h2>Architecture: one shared corpus</h2>
+<p>Every tool above — summarizer, shepardizer, brief verifier, opposing-brief analyzer — should read and write the same saved-case markdown store the extension already produces, keyed by the existing <code>canonicalKey</code>. One canonical record per case means a case downloaded during a shepardize run is immediately available to the summarizer and the brief verifier without re-fetching, and every quotation check in every tool resolves against the same source text. The extension is already most of the way there; the rule is simply that no new tool invents its own storage.</p>
+
+<h2>Caveats</h2>
+<ul>
+  <li>These tools can make research faster and catch drafting errors, but <strong>nothing in this stack should be the last check before filing</strong>. Citator coverage gaps and LLM classification errors are real, and each tool's output should say so explicitly.</li>
+  <li>LLM output that asserts a quotation, holding, or treatment must always carry a verifiable pinpoint back to source text. The prompts in this folder already enforce that discipline — every new tool should inherit it.</li>
+  <li>None of this is legal advice, and a tool report is not a substitute for reading the controlling opinion.</li>
+</ul>
+
+<footer>
+  Generated 2026-08-29 · CaseLawSearch workspace · Companion documents: <em>unified-legal-research-extension-plan.html</em>, <em>lawyer-case-law-research-workflow-report.html</em>
+</footer>
+
+</div>
+</body>
+</html>

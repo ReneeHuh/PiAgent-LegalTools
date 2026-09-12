@@ -1,0 +1,57 @@
+{
+  "cwd": "C:\\Users\\bacon21\\AppData\\Local\\Temp\\legal-live-smoke-7NRVS2",
+  "checks": [
+    {
+      "kind": "michigan-pagination",
+      "provider": "scholar",
+      "status": "completed",
+      "pages": [
+        1,
+        2
+      ],
+      "count": 40,
+      "courts": [
+        "Mich: Supreme Court",
+        "Mich: Court of Appeals"
+      ],
+      "runId": "2026-09-11-michigan-reasonable-care-95fe25f7"
+    },
+    {
+      "kind": "michigan-pagination",
+      "provider": "courtlistener",
+      "status": "stopped",
+      "pages": [
+        1
+      ],
+      "count": 20,
+      "courts": [
+        "Mich. Ct. App.",
+        "Mich."
+      ],
+      "reason": "CDP Runtime.evaluate timed out after 30000ms; is the Chrome window responsive?",
+      "runId": "2026-09-11-michigan-reasonable-care-7360f75d"
+    },
+    {
+      "kind": "cited-by-refresh",
+      "first": {
+        "id": "2026-09-11T19-56-06-996Z-1d2cf62f",
+        "status": "paused",
+        "count": 0
+      },
+      "refresh": {
+        "id": "2026-09-11T19-56-51-968Z-de496c4f",
+        "status": "paused",
+        "count": 0
+      },
+      "originalUnchanged": true
+    },
+    {
+      "kind": "library-integrity",
+      "count": 2,
+      "statuses": [
+        "valid",
+        "valid"
+      ]
+    }
+  ]
+}

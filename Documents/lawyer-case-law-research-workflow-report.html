@@ -1,0 +1,1042 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An evidence-based report on how lawyers find, evaluate, validate, and synthesize case law, with product recommendations for a unified Pi legal-research extension.">
+  <title>How Lawyers Search for Case Law | Workflow and Extension Strategy</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182126;
+      --muted: #5c6a70;
+      --paper: #fffefb;
+      --canvas: #f2f3ef;
+      --line: #d8ddd8;
+      --navy: #173449;
+      --navy-2: #244d66;
+      --teal: #126a67;
+      --teal-soft: #e8f5f2;
+      --gold: #9a6818;
+      --gold-soft: #fff5df;
+      --red: #9e3b30;
+      --red-soft: #fff0ed;
+      --blue: #275f92;
+      --blue-soft: #edf4fb;
+      --green: #2d704f;
+      --green-soft: #edf7f1;
+      --shadow: 0 12px 34px rgba(23, 52, 73, .08);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 95% 3%, rgba(18, 106, 103, .09), transparent 28rem),
+        var(--canvas);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.58;
+    }
+    a { color: var(--blue); text-underline-offset: 2px; }
+    a:hover { color: var(--teal); }
+    code {
+      padding: .08rem .3rem;
+      border: 1px solid #d9e5eb;
+      border-radius: 5px;
+      background: #f3f8fa;
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      font-size: .9em;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 4.7rem max(1.25rem, calc((100vw - 1220px) / 2)) 3.8rem;
+      color: white;
+      background:
+        radial-gradient(circle at 81% 17%, rgba(68, 170, 157, .32), transparent 28%),
+        radial-gradient(circle at 12% 120%, rgba(216, 174, 83, .22), transparent 35%),
+        linear-gradient(135deg, #102b3d 0%, #173f54 58%, #17645f 120%);
+    }
+    .hero::after {
+      position: absolute;
+      right: -5rem;
+      bottom: -9rem;
+      width: 27rem;
+      height: 27rem;
+      border: 1px solid rgba(255,255,255,.11);
+      border-radius: 50%;
+      content: "";
+      box-shadow: 0 0 0 3rem rgba(255,255,255,.025), 0 0 0 7rem rgba(255,255,255,.018);
+    }
+    .eyebrow {
+      margin: 0 0 .75rem;
+      color: #9ee2da;
+      font-size: .76rem;
+      font-weight: 800;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 970px;
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2.6rem, 5.7vw, 5rem);
+      font-weight: 500;
+      letter-spacing: -.04em;
+      line-height: 1.01;
+    }
+    .subtitle {
+      max-width: 850px;
+      margin: 1.3rem 0 0;
+      color: #dcecf0;
+      font-size: 1.12rem;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .65rem;
+      margin-top: 2rem;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .38rem .72rem;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 999px;
+      color: #efffff;
+      background: rgba(255,255,255,.08);
+      font-size: .8rem;
+      font-weight: 700;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 238px minmax(0, 1fr);
+      gap: 2rem;
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    nav {
+      position: sticky;
+      top: 1.2rem;
+      align-self: start;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 254, 251, .94);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(9px);
+    }
+    nav strong {
+      display: block;
+      margin: 0 0 .55rem;
+      color: var(--navy);
+      font-size: .74rem;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+    nav a {
+      display: block;
+      padding: .42rem .55rem;
+      border-radius: 7px;
+      color: #3b505b;
+      text-decoration: none;
+      font-size: .86rem;
+    }
+    nav a:hover { color: var(--teal); background: var(--teal-soft); }
+    .nav-note {
+      margin: .8rem .35rem .2rem;
+      padding-top: .75rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .73rem;
+      line-height: 1.45;
+    }
+
+    main { min-width: 0; }
+    section {
+      margin-bottom: 1.45rem;
+      padding: clamp(1.35rem, 3vw, 2.15rem);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    h2 {
+      margin: 0 0 1rem;
+      color: var(--navy);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(1.65rem, 3vw, 2.05rem);
+      font-weight: 600;
+      line-height: 1.2;
+    }
+    h3 { margin: 1.5rem 0 .6rem; color: var(--navy-2); font-size: 1.06rem; }
+    h4 { margin: 1rem 0 .35rem; color: var(--navy); font-size: .96rem; }
+    p { margin: .66rem 0; }
+    ul, ol { padding-left: 1.28rem; }
+    li + li { margin-top: .38rem; }
+    .lede { max-width: 900px; color: #3f535e; font-size: 1.06rem; }
+    .small { color: var(--muted); font-size: .83rem; }
+    .cite { white-space: nowrap; font-size: .78em; font-weight: 750; text-decoration: none; }
+
+    .verdict {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1.25rem;
+      align-items: center;
+      padding: 1.25rem;
+      border: 1px solid #a9d8cf;
+      border-left: 6px solid var(--teal);
+      border-radius: 12px;
+      background: var(--teal-soft);
+    }
+    .verdict strong { display: block; margin-bottom: .3rem; color: #0e5c59; font-size: 1.08rem; }
+    .verdict-mark {
+      display: grid;
+      width: 4.2rem;
+      height: 4.2rem;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--teal);
+      font-family: Georgia, serif;
+      font-size: 1.8rem;
+    }
+
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .85rem;
+      margin-top: 1.25rem;
+    }
+    .principle, .card {
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcfa;
+    }
+    .principle .number {
+      float: left;
+      display: grid;
+      width: 2rem;
+      height: 2rem;
+      margin: .05rem .7rem .35rem 0;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--navy-2);
+      font-size: .78rem;
+      font-weight: 800;
+    }
+    .principle b, .card b { color: var(--navy); }
+
+    .workflow {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .9rem;
+      margin-top: 1.2rem;
+    }
+    .step {
+      position: relative;
+      min-height: 146px;
+      padding: 1rem 1rem 1rem 3.9rem;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fcfdfb;
+    }
+    .step-num {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      display: grid;
+      width: 2.25rem;
+      height: 2.25rem;
+      place-items: center;
+      border-radius: 10px;
+      color: white;
+      background: linear-gradient(135deg, var(--navy-2), var(--teal));
+      font-weight: 850;
+    }
+    .step h3 { margin: 0 0 .35rem; font-size: 1rem; }
+    .step p { margin: 0; color: #465962; font-size: .9rem; }
+    .step .artifact {
+      display: inline-block;
+      margin-top: .55rem;
+      padding: .17rem .48rem;
+      border-radius: 999px;
+      color: #315c55;
+      background: #e8f3ee;
+      font-size: .71rem;
+      font-weight: 750;
+    }
+
+    .loop {
+      margin: 1rem 0 0;
+      padding: .85rem 1rem;
+      border: 1px dashed #8eb9af;
+      border-radius: 11px;
+      color: #285951;
+      background: #f3faf7;
+      text-align: center;
+      font-size: .9rem;
+      font-weight: 700;
+    }
+
+    .table-wrap { overflow-x: auto; margin-top: 1rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+    th, td {
+      padding: .72rem .75rem;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+    th { color: var(--navy); background: #eef2f2; font-size: .78rem; letter-spacing: .02em; }
+    tbody tr:nth-child(even) { background: #fbfcfa; }
+    .yes { color: var(--green); font-weight: 800; }
+    .warn { color: var(--gold); font-weight: 800; }
+    .no { color: var(--red); font-weight: 800; }
+
+    .authority-stack { display: grid; gap: .55rem; margin-top: 1rem; }
+    .authority-row {
+      display: grid;
+      grid-template-columns: 145px 1fr;
+      gap: .75rem;
+      align-items: center;
+      padding: .75rem .9rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfcfb;
+    }
+    .authority-row b { color: var(--navy); }
+    .authority-row span { color: #485a62; font-size: .88rem; }
+
+    .callout {
+      margin: 1rem 0;
+      padding: 1rem 1.1rem;
+      border-radius: 11px;
+      color: #6c4510;
+      background: var(--gold-soft);
+      border: 1px solid #e8cd91;
+    }
+    .callout.red { color: #7d3027; background: var(--red-soft); border-color: #efbcb5; }
+    .callout.blue { color: #214f76; background: var(--blue-soft); border-color: #bdd4e7; }
+    .callout b { display: block; margin-bottom: .25rem; }
+
+    .two-col, .three-col {
+      display: grid;
+      gap: .9rem;
+      margin-top: 1rem;
+    }
+    .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card h3 { margin: 0 0 .45rem; font-size: 1rem; }
+    .card p, .card li { color: #455861; font-size: .88rem; }
+    .card ul { margin-bottom: 0; }
+    .tag {
+      display: inline-block;
+      margin: 0 .25rem .25rem 0;
+      padding: .18rem .48rem;
+      border-radius: 999px;
+      color: #31545d;
+      background: #eaf0f1;
+      font-size: .7rem;
+      font-weight: 760;
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr 3rem 1.15fr;
+      gap: 1rem;
+      align-items: stretch;
+      margin-top: 1.2rem;
+    }
+    .architecture-box {
+      padding: 1.15rem;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #f9fbfa;
+    }
+    .architecture-box.primary { border-color: #a9d8cf; background: var(--teal-soft); }
+    .architecture-arrow {
+      display: grid;
+      place-items: center;
+      color: var(--teal);
+      font-size: 2rem;
+      font-weight: 300;
+    }
+    .architecture-box h3 { margin: 0 0 .65rem; }
+    .architecture-box ul { margin-bottom: 0; }
+
+    .status-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      margin: .9rem 0;
+    }
+    .status {
+      padding: .4rem .65rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafbf9;
+      font-size: .77rem;
+      font-weight: 750;
+    }
+    .status.discovery { color: #315c82; border-color: #bed3e5; background: var(--blue-soft); }
+    .status.reviewed { color: #316148; border-color: #bfddca; background: var(--green-soft); }
+    .status.validated { color: #684816; border-color: #e7cb92; background: var(--gold-soft); }
+
+    .roadmap { counter-reset: phase; display: grid; gap: .75rem; margin-top: 1rem; }
+    .roadmap-item {
+      position: relative;
+      padding: 1rem 1rem 1rem 4.2rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcfa;
+    }
+    .roadmap-item::before {
+      counter-increment: phase;
+      position: absolute;
+      top: .95rem;
+      left: 1rem;
+      display: grid;
+      width: 2.5rem;
+      height: 2.5rem;
+      place-items: center;
+      border-radius: 9px;
+      color: white;
+      background: var(--navy-2);
+      content: counter(phase);
+      font-weight: 850;
+    }
+    .roadmap-item b { display: block; color: var(--navy); }
+    .roadmap-item p { margin: .25rem 0 0; color: #4d5e65; font-size: .88rem; }
+
+    .checklist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem .9rem; padding: 0; list-style: none; }
+    .checklist li {
+      position: relative;
+      margin: 0;
+      padding: .7rem .75rem .7rem 2.2rem;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fbfcfa;
+      font-size: .87rem;
+    }
+    .checklist li::before { position: absolute; left: .75rem; color: var(--teal); content: "\2610"; font-size: 1.1rem; }
+
+    .sources { counter-reset: source; padding: 0; list-style: none; }
+    .sources li {
+      position: relative;
+      margin: 0;
+      padding: .78rem .8rem .78rem 3rem;
+      border-top: 1px solid var(--line);
+      font-size: .84rem;
+    }
+    .sources li:first-child { border-top: 0; }
+    .sources li::before {
+      counter-increment: source;
+      position: absolute;
+      top: .75rem;
+      left: .65rem;
+      display: grid;
+      width: 1.6rem;
+      height: 1.6rem;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--navy-2);
+      content: counter(source);
+      font-size: .68rem;
+      font-weight: 800;
+    }
+    .sources b { color: var(--navy); }
+    .source-type { color: var(--muted); font-size: .76rem; }
+
+    footer {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 0 1.25rem 3rem;
+      color: var(--muted);
+      font-size: .8rem;
+      text-align: center;
+    }
+
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: static; display: flex; flex-wrap: wrap; gap: .2rem; }
+      nav strong { width: 100%; }
+      nav a { display: inline-block; }
+      .nav-note { width: 100%; }
+      .three-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      .hero { padding-top: 3.2rem; }
+      .workflow, .principles, .two-col, .checklist { grid-template-columns: 1fr; }
+      .architecture { grid-template-columns: 1fr; }
+      .architecture-arrow { transform: rotate(90deg); }
+      .verdict { grid-template-columns: 1fr; }
+      .verdict-mark { display: none; }
+      .authority-row { grid-template-columns: 1fr; gap: .2rem; }
+    }
+    @media print {
+      body { background: white; }
+      .hero { padding: 2rem; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .layout { display: block; max-width: none; padding: 1rem 0; }
+      nav { display: none; }
+      section { break-inside: avoid; box-shadow: none; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">Research report &bull; Product strategy</p>
+    <h1>How lawyers actually search for case law</h1>
+    <p class="subtitle">The search box is only one part of a defensible workflow. Lawyers define the question, identify controlling authority, search by several methods, read the full opinions, update every important case, synthesize the results, and document when the research is complete.</p>
+    <div class="hero-meta">
+      <span class="pill">Internet research reviewed 26 August 2026</span>
+      <span class="pill">United States case-law focus</span>
+      <span class="pill">Implications for the unified Pi extension</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="Report sections">
+      <strong>Contents</strong>
+      <a href="#answer">Executive answer</a>
+      <a href="#workflow">The research loop</a>
+      <a href="#finding">How cases are found</a>
+      <a href="#authority">Authority and relevance</a>
+      <a href="#reading">Reading the opinion</a>
+      <a href="#validation">Citators and validation</a>
+      <a href="#stopping">Knowing when to stop</a>
+      <a href="#tools">Where each source fits</a>
+      <a href="#implications">Extension implications</a>
+      <a href="#design">Recommended design</a>
+      <a href="#roadmap">Delivery roadmap</a>
+      <a href="#sources">Sources</a>
+      <p class="nav-note">This is a product-design and research-method report, not legal advice. Workflows vary by jurisdiction, organization, matter, and assignment.</p>
+    </nav>
+
+    <main>
+      <section id="answer">
+        <h2>Executive answer</h2>
+        <div class="verdict">
+          <div>
+            <strong>Lawyers do not just search for cases; they build and validate a chain of authority.</strong>
+            A result is useful only after the researcher knows why it matters, whether the deciding court can bind the relevant court, what proposition the opinion actually holds, and whether later law has weakened or displaced it.
+          </div>
+          <div class="verdict-mark" aria-hidden="true">&sect;</div>
+        </div>
+        <p class="lede">Professional guidance consistently describes legal research as a planned, iterative process. Researchers establish scope and jurisdiction, use secondary sources to learn an unfamiliar field, locate primary authority through multiple search methods, validate it, preserve a research trail, and stop only when the results are sufficiently complete for the assignment. <a class="cite" href="#source-cornell">[1]</a> <a class="cite" href="#source-georgetown-strategy">[2]</a> <a class="cite" href="#source-aall">[3]</a></p>
+
+        <div class="principles">
+          <div class="principle"><span class="number">1</span><b>Search begins before the database.</b><br>The assignment, legally significant facts, governing jurisdiction, court level, time period, and deliverable determine what should be searched.</div>
+          <div class="principle"><span class="number">2</span><b>Relevant is not the same as controlling.</b><br>An opinion can match the facts yet remain unusable because it is nonprecedential, outside the jurisdiction, superseded, or procedurally inapposite.</div>
+          <div class="principle"><span class="number">3</span><b>Discovery is not validation.</b><br>Search rankings and citation counts find candidates. They do not establish that a proposition remains good law.</div>
+          <div class="principle"><span class="number">4</span><b>Completion is coverage, not page count.</b><br>Research is defensible when controlling sources and material counterauthority are covered, important cases are updated, methods converge, and remaining gaps are disclosed.</div>
+        </div>
+
+        <div class="callout blue">
+          <b>Bottom line for this project</b>
+          Running Google Scholar and CourtListener together is a strong discovery design. Google Scholar should remain the preferred display order, while CourtListener contributes structured metadata, citation lookup, and independent recall. But the extension needs a research-session layer before it can support the larger lawyer workflow.
+        </div>
+      </section>
+
+      <section id="workflow">
+        <h2>The end-to-end research loop</h2>
+        <p class="lede">This ten-stage model synthesizes the practical guidance from law libraries, court materials, professional competency standards, and the two current source systems. It is not perfectly linear: a good case changes the vocabulary, reveals new issues, and sends the researcher back through the loop.</p>
+
+        <div class="workflow">
+          <article class="step">
+            <span class="step-num">1</span>
+            <h3>Frame the assignment</h3>
+            <p>Record the question, client or audience, deliverable, deadline, cost constraints, and the factual and procedural context.</p>
+            <span class="artifact">Output: research brief</span>
+          </article>
+          <article class="step">
+            <span class="step-num">2</span>
+            <h3>Fix the governing frame</h3>
+            <p>Identify jurisdiction, forum, court hierarchy, relevant dates, publication rules, and the sources of law that can control.</p>
+            <span class="artifact">Output: authority map</span>
+          </article>
+          <article class="step">
+            <span class="step-num">3</span>
+            <h3>Build the issue tree</h3>
+            <p>Break claims, defenses, elements, standards, remedies, and procedural questions into searchable subissues.</p>
+            <span class="artifact">Output: issue checklist</span>
+          </article>
+          <article class="step">
+            <span class="step-num">4</span>
+            <h3>Learn the vocabulary</h3>
+            <p>When the field is unfamiliar, consult treatises, practice guides, encyclopedias, and annotations for doctrine, terms, and seed citations.</p>
+            <span class="artifact">Output: terms + seed authorities</span>
+          </article>
+          <article class="step">
+            <span class="step-num">5</span>
+            <h3>Search in several ways</h3>
+            <p>Combine known-item lookup, natural language, Boolean/field queries, facts and posture, digests or headnotes, and statute-linked cases.</p>
+            <span class="artifact">Output: candidate set + query log</span>
+          </article>
+          <article class="step">
+            <span class="step-num">6</span>
+            <h3>Follow the citation network</h3>
+            <p>Use one useful opinion to move backward to its authorities, forward to later treatment, and sideways to related cases.</p>
+            <span class="artifact">Output: citation trail</span>
+          </article>
+          <article class="step">
+            <span class="step-num">7</span>
+            <h3>Triage by authority and fit</h3>
+            <p>Prioritize controlling, precedential, current decisions that address the same issue and procedural posture; preserve contrary authority.</p>
+            <span class="artifact">Output: review queue</span>
+          </article>
+          <article class="step">
+            <span class="step-num">8</span>
+            <h3>Read and brief the full opinion</h3>
+            <p>Verify facts, posture, issue, rule, holding, reasoning, disposition, separate opinions, quotations, and pin cites.</p>
+            <span class="artifact">Output: case note</span>
+          </article>
+          <article class="step">
+            <span class="step-num">9</span>
+            <h3>Validate and update</h3>
+            <p>Check direct history and later treatment in a citator, inspect treatment at the relevant point of law, and read material citing opinions.</p>
+            <span class="artifact">Output: validation record</span>
+          </article>
+          <article class="step">
+            <span class="step-num">10</span>
+            <h3>Synthesize, write, and close</h3>
+            <p>Organize authority by issue, explain both supporting and adverse law, fill gaps revealed by drafting, and record why the search can stop.</p>
+            <span class="artifact">Output: memo + research record</span>
+          </article>
+        </div>
+        <div class="loop">New facts, terminology, citing decisions, or drafting gaps &rarr; revise the issue tree and search again.</div>
+
+        <p class="small">Support: Georgetown recommends defining the assignment, isolating legally significant facts, and making a research plan before searching; AALL's competency standards call for governing authority, validation, documentation, and appropriate stopping; Berkeley describes research as iterative. <a class="cite" href="#source-georgetown-strategy">[2]</a> <a class="cite" href="#source-aall">[3]</a> <a class="cite" href="#source-berkeley">[4]</a></p>
+      </section>
+
+      <section id="finding">
+        <h2>How lawyers find cases in practice</h2>
+        <p class="lede">No single query style is sufficient. Lawyers switch methods because each method has different failure modes: terminology changes, opinions omit an expected phrase, factual similarity can hide behind doctrinal labels, and a known citation can unlock an entire line of cases.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Method</th><th>What the researcher enters</th><th>Best use</th><th>Main blind spot</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><b>Known-item lookup</b></td><td>Party names, reporter citation, docket, judge, or date</td><td>Retrieving a specific opinion or verifying identity</td><td>Requires a reliable identifying clue</td></tr>
+              <tr><td><b>Natural-language search</b></td><td>A plain-English description of the issue and key facts</td><td>Early exploration and terminology discovery</td><td>Ranking can bury controlling or adverse authority</td></tr>
+              <tr><td><b>Terms and connectors</b></td><td>Terms of art, synonyms, Boolean logic, proximity, and field limits</td><td>Precise, repeatable issue searches</td><td>Misses cases that use different vocabulary</td></tr>
+              <tr><td><b>Facts + procedural posture</b></td><td>Legally significant facts, motion type, remedy, standard of review</td><td>Finding useful analogies and distinguishing cases</td><td>Surface factual resemblance can obscure a different legal issue</td></tr>
+              <tr><td><b>Digest/headnote taxonomy</b></td><td>Topic and classification numbers attached to a useful case</td><td>Moving across vocabulary and finding doctrinally related cases</td><td>Editorial headnotes are finding aids, not the court's law</td></tr>
+              <tr><td><b>Citation chaining</b></td><td>Authorities cited by a case and later decisions citing it</td><td>Tracing doctrine, treatment, splits, and newer applications</td><td>A raw citation does not reveal treatment or proposition</td></tr>
+              <tr><td><b>Statute/rule annotations</b></td><td>The governing code section, rule, or regulation</td><td>Finding decisions that interpret authoritative text</td><td>Must check amendments and the effective date</td></tr>
+              <tr><td><b>Secondary-source trail</b></td><td>Treatise sections, practice guides, ALR, law-review citations</td><td>Learning an unfamiliar area and obtaining seed cases</td><td>Secondary authority is not binding and can be stale</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <h3>Start broad enough to learn</h3>
+            <p>Early searches reveal the vocabulary, doctrinal structure, and leading authorities. Cornell and the Library of Congress both distinguish primary authority from explanatory secondary sources and recognize the latter as an efficient starting point in an unfamiliar field. <a class="cite" href="#source-cornell">[1]</a> <a class="cite" href="#source-loc-secondary">[5]</a></p>
+          </div>
+          <div class="card">
+            <h3>Then search against your first answer</h3>
+            <p>A defensible search deliberately seeks contrary holdings, limiting language, other jurisdictions, procedural distinctions, and newer authority. This reduces confirmation bias and improves the final explanation of uncertainty.</p>
+          </div>
+        </div>
+
+        <div class="callout">
+          <b>A useful result page is a triage surface, not the research product.</b>
+          Lawyers scan case identity, court, date, citation, posture, issue language, treatment signals, and snippets to decide what to open. They cannot reliably extract a holding from the result snippet alone.
+        </div>
+      </section>
+
+      <section id="authority">
+        <h2>Authority and relevance are separate questions</h2>
+        <p class="lede">A case can be textually similar yet legally weak. Lawyers first ask what can bind the deciding court, then evaluate whether the case actually addresses the same issue under a compatible procedural and factual setting.</p>
+
+        <div class="authority-stack">
+          <div class="authority-row"><b>1. Governing source</b><span>Is the proposition controlled by a constitution, statute, regulation, rule, or binding appellate decision?</span></div>
+          <div class="authority-row"><b>2. Court relationship</b><span>Does the deciding court sit above the relevant court in the same hierarchy, or is the opinion merely persuasive?</span></div>
+          <div class="authority-row"><b>3. Precedential status</b><span>Is the opinion published or designated precedential, and may it be cited under the jurisdiction's rules?</span></div>
+          <div class="authority-row"><b>4. Current validity</b><span>Was the judgment vacated, reversed, or superseded? Has the relevant proposition been criticized, limited, or displaced?</span></div>
+          <div class="authority-row"><b>5. Issue and posture fit</b><span>Does the opinion decide the same legal issue under the relevant standard, burden, claim stage, or standard of review?</span></div>
+          <div class="authority-row"><b>6. Factual fit</b><span>Which facts mattered to the court's reasoning, and how do they compare to the present facts?</span></div>
+          <div class="authority-row"><b>7. Time and legal change</b><span>Is there newer controlling law, an en banc decision, or an amended statute, rule, or regulation?</span></div>
+        </div>
+
+        <p>The vertical hierarchy is fundamental: federal appellate decisions bind lower federal courts within that circuit, while state high-court decisions bind lower courts in that state on state law; the precise rules become more nuanced across sovereign systems and for predictions of state law. <a class="cite" href="#source-us-courts">[6]</a> <a class="cite" href="#source-loc-hierarchy">[7]</a></p>
+
+        <div class="callout red">
+          <b>Do not collapse legal authority into one opaque relevance score.</b>
+          The extension may rank candidates for review, but it should expose the underlying dimensions. Binding status, validity, precedential status, issue fit, and factual fit are different judgments; a single score can hide a fatal defect.
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <h3>Nonprecedential opinions</h3>
+            <p>Federal Rule of Appellate Procedure 32.1 limits restrictions on citing federal unpublished dispositions issued on or after 1 January 2007, but it does not decide their precedential effect. State rules can differ substantially. <a class="cite" href="#source-frap">[8]</a></p>
+          </div>
+          <div class="card">
+            <h3>Persuasive cases</h3>
+            <p>An out-of-jurisdiction or lower-court opinion may still be useful for reasoning, factual analogy, or an open question. The product should label it persuasive rather than exclude it or present it as controlling.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="reading">
+        <h2>The full opinion is the unit of legal analysis</h2>
+        <p class="lede">Search snippets, summaries, headnotes, and LLM output are navigation aids. The researcher must read the opinion to determine what the court decided and whether a quotation or proposition is accurately supported.</p>
+
+        <div class="three-col">
+          <div class="card">
+            <h3>Identity and posture</h3>
+            <ul>
+              <li>Full case name and citations</li>
+              <li>Court, panel, date, and docket</li>
+              <li>Procedural history and posture</li>
+              <li>Question presented and standard of review</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Decision</h3>
+            <ul>
+              <li>Material facts</li>
+              <li>Rule and actual holding</li>
+              <li>Reasoning and limiting language</li>
+              <li>Judgment and disposition</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Use in the new matter</h3>
+            <ul>
+              <li>Binding or persuasive status</li>
+              <li>Factual similarities and differences</li>
+              <li>Exact quotations with pin cites</li>
+              <li>Concurrences, dissents, and unresolved issues</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout">
+          <b>Headnotes are excellent finding tools, but they are not the opinion.</b>
+          Digests and editorial classifications can lead a researcher to the relevant passage; the proposition must then be checked against the court's own words and context. The Library of Congress describes headnotes and Key Numbers as research tools, while its research material cautions researchers to read and update the case itself. <a class="cite" href="#source-loc-digests">[9]</a> <a class="cite" href="#source-loc-case-pdf">[10]</a>
+        </div>
+
+        <h3>What an AI-generated <code>case.md</code> should contain</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Required block</th><th>Why it matters</th><th>Verification rule</th></tr></thead>
+            <tbody>
+              <tr><td>Case identity + source provenance</td><td>Prevents cross-document and duplicate-case confusion</td><td>Copy from downloaded metadata and opinion header</td></tr>
+              <tr><td>Posture, issue, holding, rule, reasoning, disposition</td><td>Separates the parts lawyers use differently</td><td>Every material statement must map to an evidence segment</td></tr>
+              <tr><td>Exact quotes + page/paragraph pinpoints</td><td>Makes the draft auditable and useful in later writing</td><td>Reject or flag quotations that cannot be found verbatim</td></tr>
+              <tr><td>Applicability and limitations</td><td>Surfaces factual and procedural differences rather than only similarities</td><td>Label as analysis, not as a fact from the opinion</td></tr>
+              <tr><td>Validation status</td><td>Prevents a polished summary from implying the case is good law</td><td>Default to <b>not citator-validated</b> until a separate check is recorded</td></tr>
+              <tr><td>Model, timestamp, source hash, prompt/schema version</td><td>Supports reproducibility and later regeneration</td><td>Write to both the case file and session manifest</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="small">ABA Formal Opinion 512 says lawyers using generative AI remain responsible for competent review of its output and must also consider confidentiality, supervision, candor, and reasonable fees. That supports a visible draft label and human-verification workflow. <a class="cite" href="#source-aba-512">[11]</a></p>
+      </section>
+
+      <section id="validation">
+        <h2>Citation graphs help discovery; citators support validation</h2>
+        <p class="lede">These are related but different jobs. A free cited-by list tells the researcher that another document cites a case. A professional citator adds direct history, editorial or algorithmic treatment, treatment at a particular point of law, and tools for investigating the citing references.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Question</th><th>Raw cited-by graph</th><th>Professional citator workflow</th></tr></thead>
+            <tbody>
+              <tr><td>Who cites this case?</td><td class="yes">Useful</td><td class="yes">Useful, with filters and treatment context</td></tr>
+              <tr><td>What is the direct appellate history?</td><td class="warn">May be inferable, but incomplete</td><td class="yes">Designed to display history</td></tr>
+              <tr><td>Was the judgment reversed or vacated?</td><td class="warn">Requires manual investigation</td><td class="yes">Prominent history/treatment signals</td></tr>
+              <tr><td>Was this exact proposition limited?</td><td class="no">Citation alone does not say</td><td class="yes">Treatment and headnote-level tools assist review</td></tr>
+              <tr><td>Is the opinion now safe to rely on?</td><td class="no">Cannot establish this</td><td class="warn">Still requires lawyer judgment and reading</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Google itself warns that Scholar legal opinions are provided for informational purposes and does not warrant completeness or accuracy. The Library of Congress describes Scholar's <i>How Cited</i> feature as a useful starting overview but not as authoritative as dedicated citators. <a class="cite" href="#source-scholar-help">[12]</a> <a class="cite" href="#source-loc-scholar">[13]</a></p>
+
+        <div class="two-col">
+          <div class="card">
+            <h3>What the extension can say</h3>
+            <p><span class="tag">cited-by results collected</span> <span class="tag">direct history candidate</span> <span class="tag">later negative language detected</span> <span class="tag">manual review required</span></p>
+            <p>It may expose evidence and workflow state, including which providers and pages were checked.</p>
+          </div>
+          <div class="card">
+            <h3>What it must not say</h3>
+            <p><span class="tag">good law</span> <span class="tag">fully validated</span> <span class="tag">no negative treatment</span> <span class="tag">complete citing set</span></p>
+            <p>Those claims exceed what Scholar and CourtListener alone can prove.</p>
+          </div>
+        </div>
+
+        <h3>Recommended validation states</h3>
+        <div class="status-line">
+          <span class="status discovery">1 &middot; Discovered</span>
+          <span class="status reviewed">2 &middot; Full opinion reviewed</span>
+          <span class="status reviewed">3 &middot; Free citation graph reviewed</span>
+          <span class="status validated">4 &middot; Commercial citator checked</span>
+          <span class="status validated">5 &middot; Official history/source confirmed</span>
+        </div>
+        <p class="small">KeyCite and Shepard's describe history, treatment signals, and citing-reference features, but their signals are research leads rather than substitutes for reading the authorities. <a class="cite" href="#source-keycite">[14]</a> <a class="cite" href="#source-shepards">[15]</a></p>
+      </section>
+
+      <section id="stopping">
+        <h2>How lawyers decide when to stop</h2>
+        <p class="lede">Legal research has no universal “last page.” It stops when the work is proportionate to the assignment and the researcher can explain the coverage, the answer, the uncertainty, and the remaining risk.</p>
+
+        <ul class="checklist">
+          <li>The question, jurisdiction, forum, dates, and deliverable are confirmed.</li>
+          <li>Each material issue and element has been searched.</li>
+          <li>Controlling primary authority has been located and read.</li>
+          <li>Important cases have been updated through an appropriate citator.</li>
+          <li>Contrary authority and plausible alternative rules were sought.</li>
+          <li>Different search methods converge on the same leading authorities.</li>
+          <li>New searches mostly repeat known cases rather than add insight.</li>
+          <li>Quotations, citations, and pinpoints were verified in the opinion.</li>
+          <li>The answer can be explained on both sides with uncertainty disclosed.</li>
+          <li>Unresolved gaps, inaccessible sources, and time/cost limits are recorded.</li>
+        </ul>
+
+        <p>Yale's research strategy recommends clarifying scope, keeping detailed notes, planning and timeboxing, and considering convergence across research methods. AALL likewise includes documentation, cost-effective source selection, validation, and knowing when research is complete among core competencies. <a class="cite" href="#source-yale">[16]</a> <a class="cite" href="#source-aall">[3]</a></p>
+      </section>
+
+      <section id="tools">
+        <h2>Where each source fits</h2>
+        <p class="lede">The strongest system is layered. Free search services, official court sites, secondary sources, and citators solve different problems; no single source should be asked to do all of them.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Source</th><th>Best role</th><th>Strength</th><th>Do not treat it as</th></tr></thead>
+            <tbody>
+              <tr><td><b>Google Scholar</b></td><td>Preferred broad discovery; exact-case lookup; initial cited-by exploration</td><td>Accessible natural-language search and broad U.S. case-law coverage</td><td>A complete database, official text repository, or authoritative citator</td></tr>
+              <tr><td><b>CourtListener</b></td><td>Concurrent discovery; structured metadata; exact citation lookup; citation-network expansion</td><td>Open legal data, stable case records, search/API-oriented structure</td><td>A guarantee of complete coverage or full treatment analysis</td></tr>
+              <tr><td><b>Official court sources</b></td><td>Confirm opinion text, orders, rules, docket events, and current official materials</td><td>First-party publication</td><td>A unified nationwide discovery system</td></tr>
+              <tr><td><b>FindLaw / Justia</b></td><td>Fallback exact-opinion retrieval and human-readable mirrors</td><td>Convenient public access to particular documents</td><td>The primary discovery engine for this extension</td></tr>
+              <tr><td><b>Secondary sources</b></td><td>Explain doctrine, supply terminology, and seed primary authorities</td><td>Fast orientation in unfamiliar areas</td><td>Binding authority</td></tr>
+              <tr><td><b>KeyCite / Shepard's / BCite</b></td><td>Validate direct history, later treatment, and citing references</td><td>Purpose-built citator analysis and editorial context</td><td>An automatic legal conclusion that eliminates lawyer review</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout blue">
+          <b>The chosen two-lane search strategy is sensible.</b>
+          For ordinary discovery, start Scholar and CourtListener at the same time, merge only after both lanes finish the requested page wave, deduplicate by citation identity, and order merged matches with Scholar first. Preserve provider provenance and independent pagination. For exhaustive cited-by work, CourtListener may be the practical default while Scholar remains optional because Scholar's legal search has coverage and access constraints.
+        </div>
+
+        <p class="small">Google documents the jurisdictions and periods covered by Scholar and disclaims completeness and accuracy. CourtListener documents its search and citation-lookup capabilities. The Library of Congress lists both among useful free starting points while warning that free systems often lack an effective citator. <a class="cite" href="#source-scholar-help">[12]</a> <a class="cite" href="#source-courtlistener">[17]</a> <a class="cite" href="#source-loc-free">[18]</a></p>
+      </section>
+
+      <section id="implications">
+        <h2>What this means for the current extension plan</h2>
+        <p class="lede">The existing plan covers discovery, page navigation, download, exact-case resolution, cited-by expansion, full-text reading, and optional LLM summaries. Those are valuable operational capabilities. The missing layer is the structure that turns downloaded opinions into a defensible research record.</p>
+
+        <div class="architecture">
+          <div class="architecture-box">
+            <h3>What the plan already does well</h3>
+            <ul>
+              <li>Scholar-first, dual-provider discovery</li>
+              <li>Deterministic merge and deduplication</li>
+              <li>Pagination, resumability, and manifests</li>
+              <li>Full-opinion read and download</li>
+              <li>Cited-by collection with scope limits</li>
+              <li>Optional grounded <code>case.md</code></li>
+            </ul>
+          </div>
+          <div class="architecture-arrow" aria-hidden="true">&rarr;</div>
+          <div class="architecture-box primary">
+            <h3>What the larger workflow needs</h3>
+            <ul>
+              <li>Matter-level research question and jurisdiction</li>
+              <li>Issue/element checklist and vocabulary</li>
+              <li>Query, source, date, and coverage log</li>
+              <li>Authority and precedential-status classification</li>
+              <li>Holding-level notes, quotes, and pin cites</li>
+              <li>Validation status and external-citator record</li>
+              <li>Contrary-authority and unresolved-gap queues</li>
+              <li>Issue-based synthesis and stopping record</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>Recommended product boundary</h3>
+        <div class="two-col">
+          <div class="card">
+            <h3>Automate</h3>
+            <ul>
+              <li>Parallel discovery and normalization</li>
+              <li>Exact retrieval and citation graph collection</li>
+              <li>Opinion segmentation and evidence-linked summaries</li>
+              <li>Research logs, case tables, and coverage reports</li>
+              <li>Citator handoff and human-check recording</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Keep as an explicit lawyer judgment</h3>
+            <ul>
+              <li>What law governs the matter</li>
+              <li>Whether a proposition is the holding or dicta</li>
+              <li>Whether treatment undermines the proposition</li>
+              <li>How competing authorities apply to the facts</li>
+              <li>Whether the research is sufficient to rely on</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout red">
+          <b>Central safety rule</b>
+          Neither a generated summary nor a cited-by count should display “good law.” The strongest truthful default is: <i>full opinion downloaded; summary generated from this text; external citator not checked</i>.
+        </div>
+      </section>
+
+      <section id="design">
+        <h2>Recommended design: one extension, one research session</h2>
+        <p class="lede">Keep one extension and the focused operational modes already planned. Add a persistent <code>research_session</code> object that every search, read, download, cited-by, summary, and validation action can update. This adds the professional workflow without fragmenting the interface into many unrelated extensions.</p>
+
+        <div class="three-col">
+          <div class="card">
+            <h3>Session context</h3>
+            <p>Research question, audience, jurisdiction, forum, relevant dates, facts, posture, deadline, budget, and adverse theory.</p>
+          </div>
+          <div class="card">
+            <h3>Research state</h3>
+            <p>Issue tree, search vocabulary, query log, source coverage, result dispositions, citation trails, and follow-up tasks.</p>
+          </div>
+          <div class="card">
+            <h3>Case state</h3>
+            <p>Canonical identity, authority class, publication status, case note, quotes, validation status, synthesis tags, and rejection reason.</p>
+          </div>
+        </div>
+
+        <h3>Minimal public workflow</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Stage</th><th>How the extension supports it</th><th>Persistent result</th></tr></thead>
+            <tbody>
+              <tr><td><b>Plan</b></td><td>Create or update the session frame and issue checklist</td><td><code>session.json</code> with scoped research questions</td></tr>
+              <tr><td><b>Discover</b></td><td>Use the existing search modes; Scholar preferred, CourtListener concurrent</td><td>Queries, provider cursors, candidates, merge evidence</td></tr>
+              <tr><td><b>Review</b></td><td>Read/download full text; optionally generate an evidence-linked draft summary</td><td>Opinion, <code>case.md</code>, review status, quotes</td></tr>
+              <tr><td><b>Trace</b></td><td>Collect cited and cited-by authorities, with provider scope reported</td><td>Citation edges and follow-up review queue</td></tr>
+              <tr><td><b>Validate</b></td><td>Generate a citator checklist/handoff and let the user record findings</td><td>Timestamped validation record and notes</td></tr>
+              <tr><td><b>Synthesize</b></td><td>Group cases by issue and authority; generate tables and draft research memo</td><td>Issue synthesis, adverse-authority list, gaps, stop decision</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Case record fields worth adding</h3>
+        <p>
+          <span class="tag">jurisdiction</span>
+          <span class="tag">courtLevel</span>
+          <span class="tag">bindingStatus</span>
+          <span class="tag">publicationStatus</span>
+          <span class="tag">proceduralPosture</span>
+          <span class="tag">issues</span>
+          <span class="tag">holdingNotes</span>
+          <span class="tag">quotesWithPinCites</span>
+          <span class="tag">supports</span>
+          <span class="tag">undermines</span>
+          <span class="tag">reviewStatus</span>
+          <span class="tag">validationStatus</span>
+          <span class="tag">validationProvider</span>
+          <span class="tag">validationCheckedAt</span>
+          <span class="tag">selectedOrRejectedReason</span>
+        </p>
+
+        <div class="callout blue">
+          <b>External citator integration should begin as a handoff, not unauthorized automation.</b>
+          The extension can prepare canonical citations, links where available, and a checklist; the lawyer can perform the authenticated KeyCite, Shepard's, or BCite review and record the result. Deeper integration should require an authorized API or licensed workflow.
+        </div>
+      </section>
+
+      <section id="roadmap">
+        <h2>Practical delivery roadmap</h2>
+        <p class="lede">Do not rebuild the already-working browser logic. Add the larger workflow in layers, keeping the current fixture-first and resumable architecture.</p>
+
+        <div class="roadmap">
+          <div class="roadmap-item">
+            <b>Research-session foundation</b>
+            <p>Add the matter frame, issue tree, query/source log, case status, and immutable provenance. Existing search and download actions may optionally attach to a session.</p>
+          </div>
+          <div class="roadmap-item">
+            <b>Authority-aware review queue</b>
+            <p>Capture jurisdiction, court level, publication/precedential status where reliably available, posture notes, issue tags, and selected/rejected reasons. Expose missing data rather than guessing.</p>
+          </div>
+          <div class="roadmap-item">
+            <b>Evidence-linked case notes</b>
+            <p>Extend the summary toggle into a structured case brief with verified quotations, pinpoints when available, source hashes, and a permanent “not citator-validated” banner by default.</p>
+          </div>
+          <div class="roadmap-item">
+            <b>Validation handoff</b>
+            <p>Create a checklist for direct history and treatment, export canonical citations to a licensed citator workflow, and record provider, date, result, relevant headnote/proposition, and reviewer notes.</p>
+          </div>
+          <div class="roadmap-item">
+            <b>Issue synthesis and completeness report</b>
+            <p>Generate an authority table by issue, controlling/persuasive split, supporting/adverse cases, unreviewed leads, provider coverage, unresolved gaps, and the stopping checklist.</p>
+          </div>
+          <div class="roadmap-item">
+            <b>Broaden beyond cases only when needed</b>
+            <p>A complete legal-research product eventually needs statutes, regulations, rules, constitutional provisions, and secondary sources. Keep that separate from the first case-law workflow milestone.</p>
+          </div>
+        </div>
+
+        <h3>Acceptance tests for the bigger-picture workflow</h3>
+        <ul>
+          <li>A downloaded and summarized case never becomes “validated” merely because cited-by collection completed.</li>
+          <li>Every result retains source, query, page/cursor, retrieval time, canonical identity, and deduplication evidence.</li>
+          <li>The same case can support one issue and be adverse on another; status is proposition-aware, not only document-wide.</li>
+          <li>Binding status is either explained from recorded jurisdiction/court data or marked unknown.</li>
+          <li>A summary quotation cannot be emitted as verified unless it matches the downloaded opinion text.</li>
+          <li>The session distinguishes “not searched,” “searched with no result,” “found but unread,” “reviewed,” and “externally validated.”</li>
+          <li>The final export identifies material contrary authority and unresolved coverage limitations.</li>
+          <li>The stopping record reports what was searched, what converged, what was unavailable, and who made the completion judgment.</li>
+        </ul>
+      </section>
+
+      <section id="sources">
+        <h2>Selected sources</h2>
+        <p class="lede">Primary and institutional sources were preferred. Commercial-provider pages are used only to describe their own product features, not as independent proof of research quality.</p>
+
+        <ol class="sources">
+          <li id="source-cornell"><b>Cornell Legal Information Institute, “Legal research.”</b> Distinguishes primary and secondary authority and describes secondary sources as common starting points. <a href="https://www.law.cornell.edu/wex/Legal_research">Open source</a> <span class="source-type">&middot; Academic legal reference</span></li>
+          <li id="source-georgetown-strategy"><b>Georgetown Law Library, “Strategic Legal Research.”</b> Covers assignment analysis, legally significant facts, planning, source selection, organization, and stopping. <a href="https://www.law.georgetown.edu/wp-content/uploads/2018/02/strategicresearch.pdf">Open PDF</a> <span class="source-type">&middot; Law-library guide</span></li>
+          <li id="source-aall"><b>American Association of Law Libraries, “Principles and Standards for Legal Research Competency.”</b> Addresses governing authority, cost-effective sources, validation, documentation, and completion. <a href="https://www.aallnet.org/advocacy/legal-research-competency/principles-and-standards-for-legal-research-competency/">Open source</a> <span class="source-type">&middot; Professional standards</span></li>
+          <li id="source-berkeley"><b>UC Berkeley Law Library, “The Research Process.”</b> Describes legal research as iterative and emphasizes organization and citator updating. <a href="https://libguides.law.berkeley.edu/c.php?g=507592&amp;p=3472989">Open source</a> <span class="source-type">&middot; Law-library guide</span></li>
+          <li id="source-loc-secondary"><b>Library of Congress, “Legal Research: A Guide to Secondary Resources.”</b> Explains how secondary sources build understanding, vocabulary, and routes to primary law. <a href="https://guides.loc.gov/law-secondary-resources">Open source</a> <span class="source-type">&middot; Government law library</span></li>
+          <li id="source-us-courts"><b>Administrative Office of the U.S. Courts, “About U.S. Courts of Appeals.”</b> Explains that appellate decisions bind lower courts within the circuit. <a href="https://www.uscourts.gov/about-federal-courts/court-role-and-structure/about-us-courts-appeals">Open source</a> <span class="source-type">&middot; Official judiciary</span></li>
+          <li id="source-loc-hierarchy"><b>Library of Congress, “Case Law: The Court System and Stare Decisis.”</b> Introduces vertical precedent and federal/state hierarchy. <a href="https://guides.loc.gov/case-law">Open source</a> <span class="source-type">&middot; Government law library</span></li>
+          <li id="source-frap"><b>Federal Rule of Appellate Procedure 32.1.</b> Governs restrictions on citing designated federal unpublished dispositions while leaving precedential effect to other law. <a href="https://www.law.cornell.edu/rules/frap/rule_32.1">Open rule</a> <span class="source-type">&middot; Rule text</span></li>
+          <li id="source-loc-digests"><b>Library of Congress, “Case Law Research: Digests.”</b> Describes headnotes, digest topics, and the West Key Number System. <a href="https://guides.loc.gov/case-law/digests">Open source</a> <span class="source-type">&middot; Government law library</span></li>
+          <li id="source-loc-case-pdf"><b>Law Library of Congress, case-law research material.</b> Cautions that finding a case is only the first step and that editorial material is not a substitute for reading and updating the opinion. <a href="https://tile.loc.gov/storage-services/service/ll/llglrdppub/2019668852/2019668852.pdf">Open PDF</a> <span class="source-type">&middot; Government law library</span></li>
+          <li id="source-aba-512"><b>American Bar Association, Formal Opinion 512 (29 July 2024).</b> Addresses competence, confidentiality, communication, supervision, candor, and fees when lawyers use generative AI. <a href="https://www.americanbar.org/content/dam/aba/administrative/professional_responsibility/ethics-opinions/aba-formal-opinion-512.pdf">Open PDF</a> <span class="source-type">&middot; Professional ethics opinion</span></li>
+          <li id="source-scholar-help"><b>Google Scholar, “Search Help.”</b> Documents case-law search, jurisdiction selection, coverage, update limitations, and the disclaimer concerning legal opinions. <a href="https://scholar.google.com/intl/en/scholar/help.html">Open source</a> <span class="source-type">&middot; Provider documentation</span></li>
+          <li id="source-loc-scholar"><b>Library of Congress, “How To Find Free Case Law Online: Google Scholar.”</b> Describes How Cited as useful while distinguishing it from authoritative citators. <a href="https://guides.loc.gov/free-case-law/google-scholar">Open source</a> <span class="source-type">&middot; Government law library</span></li>
+          <li id="source-keycite"><b>Thomson Reuters, “KeyCite on Westlaw.”</b> Describes history, treatment flags, citing references, depth, and treatment features. <a href="https://legal.thomsonreuters.com/en/products/westlaw/keycite">Open source</a> <span class="source-type">&middot; Provider documentation</span></li>
+          <li id="source-shepards"><b>LexisNexis, “Shepard's Signal Indicators.”</b> Explains signals for subsequent history and treatment and notes that not every case has a signal. <a href="https://www.lexisnexis.com/en-us/support/lexis/faqs/shepards-signal-indicators.page">Open source</a> <span class="source-type">&middot; Provider documentation</span></li>
+          <li id="source-yale"><b>Yale Law Library, “Summer Research Strategies.”</b> Recommends scope clarification, detailed research notes, planning, timeboxing, and convergence as a stopping consideration. <a href="https://library.law.yale.edu/news/summer-research-strategies">Open source</a> <span class="source-type">&middot; Law-library guide</span></li>
+          <li id="source-courtlistener"><b>Free Law Project, “CourtListener Help” and citation lookup.</b> Documents search, coverage resources, and citation-based opinion lookup. <a href="https://www.courtlistener.com/help/">Help</a> &middot; <a href="https://www.courtlistener.com/c/">Citation lookup</a> <span class="source-type">&middot; Provider documentation</span></li>
+          <li id="source-loc-free"><b>Library of Congress, “How To Find Free Case Law Online.”</b> Surveys free sources and explains common coverage, digest, and citator limitations. <a href="https://guides.loc.gov/free-case-law">Open source</a> <span class="source-type">&middot; Government law library</span></li>
+        </ol>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    Prepared for the CaseLawSearch extension design review &middot; 26 August 2026 &middot; This report describes research methods and product boundaries; it does not determine the law for any matter.
+  </footer>
+</body>
+</html>
