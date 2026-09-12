@@ -86,6 +86,7 @@ test("search directly awaits summarization, saves all three files, forwards prog
   assert.equal(readdirSync(join(root, "Cases")).length, 3);
   assert.equal(row.summary?.status, "completed");
   assert.ok(existsSync(row.summary!.path!));
+  assert.match(String(splitOpinionMarkdown(readFileSync(row.summary!.path!, "utf8")).metadata?.source_path), /\.md$/i);
   assert.ok(updates.some(u => u.phase === "converting" && u.status === "completed"));
   assert.equal(updates.filter(u => u.tool === "summarize_case" && u.status === "analyzing").length, 3);
   for (const status of ["reading_source", "auditing", "reconstructing", "saving", "completed"]) assert.ok(updates.some(u => u.tool === "summarize_case" && u.status === status), status);

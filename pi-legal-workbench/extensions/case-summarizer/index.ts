@@ -47,8 +47,8 @@ export default function caseSummarizerExtension(pi: ExtensionAPI): void {
     executionMode: "sequential",
     label: "Case Summarizer",
     description:
-      "Read one saved judicial opinion and automatically save its summary beside the source as <source-name>.Summary.md. Runs three blind independent analyses sequentially, " +
-      "one combined source/quote/attribution/completeness/holding/reasoning audit, and one fresh final reconstruction. " +
+      "Read one saved judicial opinion and automatically save its summary beside the source as <source-name>.Summary.md. Normally runs three blind independent analyses sequentially, " +
+      "one combined audit, and one fresh final reconstruction. Opinions over 170,000 estimated tokens instead use overlapping parts capped at 120,000 tokens with 2,000-token overlap before audit and reconstruction. " +
       "LM Studio calls automatically use strict JSON-schema output through Chat Completions; the user receives readable Markdown. " +
       "Invalid internal JSON or source references trigger one retry of that stage. The tool verifies source-block references and exact quotations but does not check subsequent treatment or good-law status.",
     promptSnippet: "Summarize a saved judicial opinion with five audited analysis stages",
@@ -58,6 +58,7 @@ export default function caseSummarizerExtension(pi: ExtensionAPI): void {
       "summarize_case saves the summary itself and returns details.outputPath. Omit output_path for automatic Markdown output; repeat runs preserve earlier summaries with numbered filenames. Report the returned saved path rather than writing another copy.",
       "summarize_case automatically requests schema-enforced JSON for LM Studio; its modelCalls records identify the API and responseFormat used. Do not change the user's global model settings to enable this.",
       "summarize_case runs one model call at a time with a shared source prefix and per-run cache session; it normally performs five model calls, with at most ten if every stage needs its one response-validation retry; use it for a full case brief rather than a quick passage lookup.",
+      "For opinions over 170,000 estimated tokens, summarize_case automatically uses 120,000-token parts with 2,000-token overlap and reports multipart details and a validation warning.",
       "If summarize_case reports an internal model-response failure after retry, report the failed stage. Do not blame source_path, repeatedly rerun the same call, or silently replace the requested summary with case_chat.",
       "Treat summarize_case output as treatment_status=not_checked unless a separate treatment workflow was completed.",
     ],

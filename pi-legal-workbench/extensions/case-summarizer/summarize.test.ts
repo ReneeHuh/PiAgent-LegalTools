@@ -7,7 +7,8 @@ import test from "node:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Check } from "typebox/value";
 import { CaseSummaryResponseSchema, SummaryAuditResponseSchema, caseSummaryJsonShape, parseCaseSummary, parseSummaryAudit, summaryAuditJsonShape } from "./schema.ts";
-import { runCaseSummarizer } from "./summarize.ts";
+import { PART_OVERLAP_TOKENS, PART_TOKEN_LIMIT, runCaseSummarizer, splitSourceIntoOverlappingParts } from "./summarize.ts";
+import { loadCaseSource, type LoadedCaseSource } from "./source.ts";
 import { runValidatedModelCall, SummaryResponseError, type ValidatedModelCallRecord } from "./validated-model.ts";
 import { runModelCall } from "./model-runner.ts";
 
@@ -29,7 +30,9 @@ function fakeContext(cwd: string, respond: (call: Invocation) => Response | Prom
       complete: async (model: { api: string }, context: { systemPrompt: string; messages: Array<{ content: Array<{ text: string }> }> },
         options: { maxTokens: number; sessionId?: string; cacheRetention?: string; onPayload?: (payload: unknown) => unknown | Promise<unknown> }) => {
         const prompt = context.messages[0].content[0].text;
-        const stage = prompt.match(/Candidate role: ([^\n]+)/)?.[1] ?? (prompt.includes("fourth-call auditor") ? "audit" : "final");
+        const stage = prompt.match(/Candidate role: ([^\n]+)/)?.[1]
+          ?? prompt.match(/Multipart segment: ([^\n]+)/)?.[1]
+          ?? (prompt.includes("fourth-call auditor") || prompt.includes("auditing ordered partial summaries") ? "audit" : "final");
         const payload = { messages: context.messages, max_tokens: options.maxTokens };
         const call = { stage, attempt: invocations.filter(item => item.stage === stage).length + 1, prompt, maxTokens: options.maxTokens,
           systemPrompt: context.systemPrompt, sessionId: options.sessionId, cacheRetention: options.cacheRetention,
@@ -156,6 +159,57 @@ test("a valid summary still takes five calls and can be saved without altering i
   assert.match(readFileSync(join(root, "brief.md"), "utf8"), /Synthetic Case/);
   assert.equal(readFileSync(join(root, "opinion.txt"), "utf8"), sourceText);
 }));
+
+test("multipart splitting uses 120k-token parts with deterministic overlap", () => {
+  const blocks = Array.from({ length: 7 }, (_, index) => ({
+    id: `P${String(index + 1).padStart(5, "0")}`,
+    text: String(index + 1).repeat(4_000),
+  }));
+  const source = {
+    sourcePath: "opinion.md", rawSha256: "raw", textSha256: "text", rawBytes: 28_000,
+    normalizedText: blocks.map(block => block.text).join("\n\n"), blocks, estimatedTokens: 7_000,
+  } as LoadedCaseSource;
+  const parts = splitSourceIntoOverlappingParts(source, 3_000, 1_000);
+  assert.deepEqual(parts.map(part => part.blocks.map(block => block.id)), [
+    ["P00001", "P00002", "P00003"],
+    ["P00003", "P00004", "P00005"],
+    ["P00005", "P00006", "P00007"],
+  ]);
+  assert.equal(PART_TOKEN_LIMIT, 120_000);
+  assert.equal(PART_OVERLAP_TOKENS, 2_000);
+});
+
+test("a large Markdown opinion uses overlapping multipart summaries before audit and reconstruction", async () => {
+  const parent = realpathSync(tmpdir());
+  const root = realpathSync(mkdtempSync(join(parent, "summary-multipart-")));
+  try {
+    const longText = "A legally material paragraph discussing facts, rules, reasoning, and disposition. ".repeat(9_000);
+    writeFileSync(join(root, "long-opinion.md"), longText);
+    const loaded = await loadCaseSource({ cwd: root, sourcePath: "long-opinion.md" });
+    assert.ok(loaded.estimatedTokens > 170_000);
+    const { ctx, invocations } = fakeContext(root, call => {
+      if (call.stage === "audit") return { text: JSON.stringify(audit) };
+      const value = summary();
+      const firstBlock = call.prompt.match(/"blocks":\[\{"id":"(P\d+)"/)?.[1] ?? "P00001";
+      for (const section of Object.keys(value)) {
+        if (Array.isArray(value[section])) {
+          for (const item of value[section]) if (item?.source_blocks) item.source_blocks = [firstBlock];
+        }
+      }
+      return { text: JSON.stringify(value) };
+    });
+    Object.assign(ctx.model!, { contextWindow: 265_000 });
+    const output = await runCaseSummarizer({ source_path: "long-opinion.md" }, undefined, undefined, ctx);
+    assert.equal(output.details.pipeline, "overlapping_parts_then_combined_audit_then_reconstruction");
+    assert.ok(output.details.multipart && output.details.multipart.partCount >= 2);
+    assert.equal(output.details.multipart?.partTokenLimit, 120_000);
+    assert.equal(output.details.multipart?.overlapTokens, 2_000);
+    assert.equal(invocations.length, output.details.multipart!.partCount + 2);
+  } finally {
+    assert.equal(dirname(root).toLowerCase(), parent.toLowerCase());
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 for (const kind of ["bare section string", "invalid JSON", "unknown source block", "empty response"] as const) {
   test(`${kind} retries only the failed candidate and retains the other analyses`, () => fixture(async root => {

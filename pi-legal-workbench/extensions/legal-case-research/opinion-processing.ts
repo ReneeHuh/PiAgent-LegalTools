@@ -78,7 +78,7 @@ export async function processDownloadedOpinion(
   }
   report("summarizing", "running", `Calling summarize_case for ${download.case.title}`);
   try {
-    const result = await runCaseSummarizer({ source_path: saved.savedPath, metadata_path: path,
+    const result = await runCaseSummarizer({ source_path: path,
       case_key: download.case.canonicalKey }, signal, update => {
       onUpdate?.({ ...update, details: { ...update.details, tool: "summarize_case", subtool: "summarize_case", caseKey: download.case.canonicalKey } });
     }, ctx);
@@ -90,6 +90,6 @@ export async function processDownloadedOpinion(
     saved.summary = { status: "failed", sourceSha256: saved.htmlSha256,
       error: error instanceof Error ? error.message : String(error) };
     persist();
-    report("summarizing", signal?.aborted ? "cancelled" : "failed", `Opinion preserved; summary did not complete: ${saved.summary.error}. Retry summarize_case with source_path: ${saved.savedPath}`);
+    report("summarizing", signal?.aborted ? "cancelled" : "failed", `Opinion preserved; summary did not complete: ${saved.summary.error}. Retry summarize_case with source_path: ${path}`);
   }
 }

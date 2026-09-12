@@ -107,6 +107,77 @@ export function buildCandidatePrompt(
   };
 }
 
+export function buildMultipartCandidatePrompt(
+  source: LoadedCaseSource,
+  request: SummaryRequest,
+  partNumber: number,
+  partCount: number,
+): ModelPrompt {
+  return {
+    responseSchema: { name: "case_summary", schema: CaseSummaryResponseSchema },
+    systemPrompt: COMMON_SYSTEM_PROMPT,
+    userPrompt: [
+      sharedPrefix(source, request),
+      `Multipart segment: ${partNumber}/${partCount}`,
+      "This is only one ordered part of a longer judicial opinion.",
+      "Summarize only what this part expressly establishes. Do not infer the case's final holding or disposition unless this part states it.",
+      "Preserve qualifications, speaker attribution, opinion part, and the supplied original source-block IDs.",
+      "Use only the smallest directly supporting source-block set for each statement, normally no more than three blocks.",
+      "Overlap with an adjacent part may repeat source blocks; do not treat repetition as additional support.",
+      SUMMARY_FORMAT_INSTRUCTIONS,
+      caseSummaryJsonShape(),
+      "",
+    ].join("\n"),
+  };
+}
+
+export function buildMultipartAuditPrompt(
+  evidenceSource: LoadedCaseSource,
+  request: SummaryRequest,
+  partials: StructuredCaseSummary[],
+): ModelPrompt {
+  return {
+    responseSchema: { name: "case_summary_audit", schema: SummaryAuditResponseSchema },
+    systemPrompt: COMMON_SYSTEM_PROMPT,
+    userPrompt: [
+      sharedPrefix(evidenceSource, request),
+      "You are auditing ordered partial summaries of one long opinion before final reconstruction.",
+      "The supplied source contains the original blocks cited by those summaries plus adjacent context, not the complete opinion.",
+      "Remove overlap duplicates, preserve material qualifications, reconcile only what the supplied evidence supports, and flag conflicts or unsupported claims.",
+      "Do not infer that an omitted topic was absent from the complete opinion.",
+      "disagreements and required_corrections are arrays of strings. findings is an array of objects using only supplied source block IDs.",
+      "Return JSON following this concrete format example:",
+      summaryAuditJsonShape(),
+      "",
+      `PARTIAL_SUMMARIES_JSON=${JSON.stringify(partials)}`,
+    ].join("\n"),
+  };
+}
+
+export function buildMultipartFinalPrompt(
+  evidenceSource: LoadedCaseSource,
+  request: SummaryRequest,
+  partials: StructuredCaseSummary[],
+  audit: SummaryAudit,
+): ModelPrompt {
+  return {
+    responseSchema: { name: "case_summary", schema: CaseSummaryResponseSchema },
+    systemPrompt: COMMON_SYSTEM_PROMPT,
+    userPrompt: [
+      sharedPrefix(evidenceSource, request),
+      "You are combining ordered partial summaries of one long opinion into one final case summary.",
+      "The supplied source contains the original blocks cited by the partial summaries plus adjacent context.",
+      "Remove duplicate statements caused by overlap. Preserve qualifications and distinguish majority, concurrence, dissent, parties, lower courts, and quoted authorities.",
+      "Use only claims supported by the supplied original source blocks. Do not fill apparent gaps from memory.",
+      SUMMARY_FORMAT_INSTRUCTIONS,
+      caseSummaryJsonShape(),
+      "",
+      `PARTIAL_SUMMARIES_JSON=${JSON.stringify(partials)}`,
+      `AUDIT_JSON=${JSON.stringify(audit)}`,
+    ].join("\n"),
+  };
+}
+
 export function buildAuditPrompt(
   source: LoadedCaseSource,
   request: SummaryRequest,

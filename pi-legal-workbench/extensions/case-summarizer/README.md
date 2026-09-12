@@ -4,6 +4,8 @@
 
 The normal pipeline makes five calls: three independent candidate analyses run one at a time, followed by one combined audit and one final reconstruction. Each initial candidate uses an isolated prompt. The audit and final writer receive the source and earlier work. Source references are internal block IDs, not reporter page citations. Treatment is always `not_checked`.
 
+Opinions over 170,000 estimated tokens automatically use multipart mode. Parts contain at most 120,000 estimated tokens and repeat approximately 2,000 tokens of complete source blocks from the preceding part. Each part retains the original block IDs. The partial summaries are audited against their cited source blocks and adjacent context, then reconstructed into one final summary. The saved report identifies multipart mode and its part count; the opinion is never silently truncated.
+
 The stages and their retries share a per-run session ID and request short cache retention. Each prompt starts with the same opinion/request prefix and common system instructions, followed by stage-specific instructions. Candidate prompts never contain earlier candidate answers. Cache reuse and savings depend on the provider, model, and schema; the tool does not guarantee a cache hit. Other analysis tools retain their existing cache settings.
 
 ## Schema-enforced output with LM Studio
