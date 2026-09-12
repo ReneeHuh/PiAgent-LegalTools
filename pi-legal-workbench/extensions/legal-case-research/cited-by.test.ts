@@ -9,6 +9,7 @@ import {
   nextRunnableCitedByProvider,
   runCitedByReport,
   scholarChildren,
+  sourceCitedById,
 } from "./cited-by.ts";
 import type { NormalizedCase } from "./core.ts";
 
@@ -27,6 +28,39 @@ function exampleSeed(): NormalizedCase {
     }],
   };
 }
+
+test("cited-by identifiers use a usable source even when the first observation lacks one", () => {
+  const seed = exampleSeed();
+  seed.sources = [
+    { provider: "courtlistener", providerId: "123", url: "", discoveredBy: "search" },
+    { provider: "courtlistener", providerId: "123", citedById: "999", url: "", discoveredBy: "cited_by" },
+    { provider: "scholar", providerId: "1", url: "", discoveredBy: "search" },
+    { provider: "scholar", providerId: "1", citedById: "2", url: "", discoveredBy: "cited_by" },
+  ];
+  assert.equal(sourceCitedById(seed, "courtlistener"), "999");
+  assert.equal(sourceCitedById(seed, "scholar"), "2");
+  seed.sources[1].citedById = "invalid";
+  assert.equal(sourceCitedById(seed, "courtlistener"), undefined);
+});
+
+test("cited-by follows an explicit Next indication on a short page and stops on a full terminal page", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "legal-research-cited-next-"));
+  try {
+    let calls = 0;
+    const outcome = await runCitedByReport({ seed: exampleSeed(), providers: ["scholar"], save_path: directory },
+      undefined, undefined, { cwd: directory } as never, { search: async () => {
+        calls++;
+        assert.ok(calls <= 2, "must not request a nonexistent third page");
+        return { results: Array.from({ length: calls === 1 ? 10 : 20 }, (_, index) => ({
+          title: `Case ${calls}-${index}`, caseId: String(calls * 100 + index),
+          url: `https://scholar.google.com/scholar_case?case=${calls * 100 + index}`,
+        })), reachedEnd: calls === 2 };
+      } });
+    assert.equal(calls, 2);
+    assert.equal(outcome.status, "complete");
+    assert.equal(outcome.rawResults, 30);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
 
 test("generated Scholar partitions inherit filed-date bounds", () => {
   const root = { id: "root", nextOffset: 980, pagesCompleted: 50 };

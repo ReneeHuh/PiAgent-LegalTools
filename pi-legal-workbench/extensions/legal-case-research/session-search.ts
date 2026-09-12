@@ -390,7 +390,12 @@ export async function runLegalSearch(
     recordSearchDownload(run, key, reused);
   }
 
-  pageLoop: for (let page = request.startPage; !stopReason && page <= request.endPage; page += 1) {
+  // An increased download cap can select unsaved cases from earlier cached pages.
+  // Revisit their rendered results before advancing the enumeration cursor.
+  const pendingPages = priorPages.filter(page => page.records.some(record =>
+    priorSelected.some(item => sameCase(item, record.case) && !selectedKeys.has(item.canonicalKey))));
+  const firstPage = Math.min(request.startPage, ...pendingPages.map(page => page.page));
+  pageLoop: for (let page = firstPage; !stopReason && page <= request.endPage; page += 1) {
     if (signal?.aborted) {
       stopReason = "Operation cancelled before the next result page.";
       resumePage = page;
@@ -515,6 +520,13 @@ export async function runLegalSearch(
     }
   }
 
+  // Cancellation during the final derivative has no next iteration to catch it.
+  if (signal?.aborted && !stopReason) {
+    stopReason = "Operation cancelled before the search workflow finished.";
+    resumePage = completedPages.at(-1) ?? request.startPage;
+    stoppedDuringDownload = true;
+    providerExhausted = false;
+  }
   for (const download of downloads.values()) {
     if (download.saved?.markdownError) warnings.push(`${download.case.title}: Markdown conversion failed: ${download.saved.markdownError}`);
     if (request.summarize && download.saved?.summary?.status === "failed") warnings.push(`${download.case.title}: Summary failed: ${download.saved.summary.error}`);

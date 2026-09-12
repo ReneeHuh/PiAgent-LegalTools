@@ -169,6 +169,7 @@ type PageState = {
   searchBox: boolean;
   results: boolean;
   resultCards: number;
+  hasNext: boolean;
   opinion: boolean;
   alert: boolean;
   noResults: boolean;
@@ -191,6 +192,7 @@ const PROBE = `(() => {
     searchBox,
     results,
     resultCards: document.querySelectorAll("#gs_res_ccl_mid .gs_r.gs_or.gs_scl").length,
+    hasNext: !!document.querySelector('.gs_ico_nav_next')?.closest('a'),
     opinion,
     alert: !!document.querySelector(".gs_alrt"),
     noResults: /(?:did not match any (?:articles|results)|no (?:matching )?(?:articles|results)(?: were)? found)/i.test(t),
@@ -691,10 +693,15 @@ export interface ScholarSearchRequest {
 
 export interface ScholarPageResponse {
   results: ScholarSearchResult[];
-  /** A short page proves the end of exposed results; a full page 50 does not. */
+  /** Missing Next before page 50 ends exposed results; a full page 50 is capped. */
   reachedEnd: boolean;
   lastPage: number;
   timingMode: string;
+}
+
+export function scholarPageReachedEnd(page: number, resultCount: number, hasNext: boolean): boolean {
+  if (page === SCHOLAR_MAX_PAGE && resultCount >= SCHOLAR_PAGE_SIZE) return false;
+  return !hasNext;
 }
 
 function searchPath(request: ScholarSearchRequest): string {
@@ -782,9 +789,7 @@ export async function searchScholarPage(
     }, "running");
     return {
       results,
-      // A full page at offset 980 means Scholar's public 1,000-result exposure
-      // cap was reached; only a short page proves the result set ended.
-      reachedEnd: results.length < SCHOLAR_PAGE_SIZE,
+      reachedEnd: scholarPageReachedEnd(request.page, results.length, fetched.state.hasNext),
       lastPage: request.page,
       timingMode: browser.timingMode,
     };

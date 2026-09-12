@@ -571,10 +571,17 @@ function sourceKey(source: ProviderSource): string {
 }
 
 export function mergeCase(target: NormalizedCase, incoming: NormalizedCase, preferred: DiscoveryProviderId = "scholar"): NormalizedCase {
-  const sources = [...target.sources];
-  const keys = new Set(sources.map(sourceKey));
+  const sources = target.sources.map(source => ({ ...source }));
   for (const source of incoming.sources) {
-    if (!keys.has(sourceKey(source))) sources.push(source);
+    const existing = sources.find(candidate => sourceKey(candidate) === sourceKey(source));
+    if (!existing) sources.push({ ...source });
+    else {
+      // Keep original discovery provenance while filling metadata missing from
+      // an earlier observation of this same provider opinion.
+      if (!existing.citedById && source.citedById) existing.citedById = source.citedById;
+      if (!existing.snippet && source.snippet) existing.snippet = source.snippet;
+      if (!existing.url && source.url) existing.url = source.url;
+    }
   }
   sources.sort((a, b) => {
     if (a.provider === preferred && b.provider !== preferred) return -1;

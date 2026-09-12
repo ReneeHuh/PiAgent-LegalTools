@@ -19,7 +19,7 @@ import {
   type NormalizedCase,
   type DiscoveryProviderId,
 } from "./core.ts";
-import { runCitedByReport, type CitedByOutcome } from "./cited-by.ts";
+import { runCitedByReport, sourceCitedById, type CitedByOutcome } from "./cited-by.ts";
 import { uniformJurisdiction, type SavedOpinion } from "./providers.ts";
 import { checkOpinionIntegrity, findSavedOpinion, libraryEntries } from "./library.ts";
 import { listCitedCollections, newCitedCollectionDirectory } from "./cited-collections.ts";
@@ -162,12 +162,7 @@ export function loadSavedCitedBySeed(ctx: ExtensionContext, caseKey: string): No
 }
 
 export function citedByProvidersForSeed(seed: NormalizedCase): DiscoveryProviderId[] {
-  return (["scholar", "courtlistener"] as const).filter((provider) => seed.sources.some((source) => {
-    if (source.provider !== provider) return false;
-    return provider === "scholar"
-      ? Boolean(source.citedById || source.providerId)
-      : Boolean(source.citedById);
-  }));
+  return (["scholar", "courtlistener"] as const).filter(provider => Boolean(sourceCitedById(seed, provider)));
 }
 
 function citationCollectionTitle(seed: NormalizedCase): string {
@@ -420,7 +415,7 @@ export async function runLegalCitedBy(
   const downloadsPending = selectedDownloads.some((item) => item === null);
   const status = classifyLegalCitedByStatus(
     enumeration.status,
-    Boolean(processingStopped || ((signal?.aborted || Date.now() >= deadline) && downloadsPending)),
+    Boolean(processingStopped || signal?.aborted || (Date.now() >= deadline && downloadsPending)),
     failedDownloads + selectedDownloads.filter(d => d?.saved?.markdownError || (summarize && d?.saved?.summary?.status === "failed")).length,
   );
   const collection = existsSync(join(directory, "collection.json")) ? readJsonFile<{ refreshedFrom?: string; baselineCaseKeys?: string[] }>(join(directory, "collection.json")) : {};

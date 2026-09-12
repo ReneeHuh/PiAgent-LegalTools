@@ -142,7 +142,9 @@ test("renamed search fields are enforced before browser work", () => {
   }), /provider must be/);
 });
 
-test("omitting runtime_limit_minutes applies no tool-imposed deadline", async () => {
+test("omitting runtime_limit_minutes applies no tool-imposed deadline", async t => {
+  const root = mkdtempSync(join(tmpdir(), "legal-search-runtime-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   let searches = 0;
   let clockReads = 0;
   const outcome = await runLegalSearch({
@@ -153,7 +155,7 @@ test("omitting runtime_limit_minutes applies no tool-imposed deadline", async ()
     },
     undefined,
     undefined,
-    { cwd: "." } as never,
+    { cwd: root } as never,
     fakeRuntime(
       async () => {
         searches += 1;
@@ -167,7 +169,9 @@ test("omitting runtime_limit_minutes applies no tool-imposed deadline", async ()
   assert.equal(outcome.status, "completed");
 });
 
-test("an explicit runtime_limit_minutes still bounds the call", async () => {
+test("an explicit runtime_limit_minutes still bounds the call", async t => {
+  const root = mkdtempSync(join(tmpdir(), "legal-search-runtime-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   let searches = 0;
   let clockReads = 0;
   const outcome = await runLegalSearch({
@@ -179,7 +183,7 @@ test("an explicit runtime_limit_minutes still bounds the call", async () => {
     },
     undefined,
     undefined,
-    { cwd: "." } as never,
+    { cwd: root } as never,
     fakeRuntime(
       async () => {
         searches += 1;

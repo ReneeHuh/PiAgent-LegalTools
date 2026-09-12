@@ -5,8 +5,18 @@ import {
   parseScholarOpinionTitle,
   parseScholarResults,
   resolveScholarCourts,
+  scholarPageReachedEnd,
 } from "./provider-google-scholar.ts";
 import { SCHOLAR_FEDERAL_APPELLATE_CODES } from "./jurisdiction-codes.ts";
+
+test("Scholar exhaustion honors rendered Next while keeping the full exposure cap conservative", () => {
+  assert.equal(scholarPageReachedEnd(1, 20, false), true);
+  assert.equal(scholarPageReachedEnd(49, 20, false), true);
+  assert.equal(scholarPageReachedEnd(1, 20, true), false);
+  assert.equal(scholarPageReachedEnd(1, 10, true), false);
+  assert.equal(scholarPageReachedEnd(50, 20, false), false);
+  assert.equal(scholarPageReachedEnd(50, 10, false), true);
+});
 
 const RESULTS_PAGE = `<!doctype html><html><body><div id="gs_res_ccl_mid">
 <div class="gs_r gs_or gs_scl" data-cid="abc"><div class="gs_ri">

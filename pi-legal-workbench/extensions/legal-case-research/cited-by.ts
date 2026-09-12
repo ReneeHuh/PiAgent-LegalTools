@@ -127,13 +127,13 @@ function requestedProviders(values: DiscoveryProviderId[] | undefined): Discover
   return (["scholar", "courtlistener"] as DiscoveryProviderId[]).filter((provider) => requested.has(provider));
 }
 
-function sourceCitedById(seed: NormalizedCase, provider: DiscoveryProviderId): string | undefined {
-  const source = seed.sources.find((item) => item.provider === provider);
-  if (!source) return undefined;
-  if (source.citedById) return source.citedById;
+export function sourceCitedById(seed: NormalizedCase, provider: DiscoveryProviderId): string | undefined {
+  const sources = seed.sources.filter((item) => item.provider === provider);
+  const citedById = sources.find((source) => /^\d+$/.test(source.citedById ?? ""))?.citedById;
+  if (citedById) return citedById;
   // Scholar documents its case_id as the value for a cites search. CourtListener
   // explicitly distinguishes cluster_id from cites_id, so no fallback is safe there.
-  return provider === "scholar" ? source.providerId : undefined;
+  return provider === "scholar" ? sources.find((source) => /^\d+$/.test(source.providerId ?? ""))?.providerId : undefined;
 }
 
 function newProviderState(
@@ -350,7 +350,7 @@ async function fetchCourtListenerPage(
   state.rawResults += response.results.length;
   state.pagesCompleted += 1;
   state.nextPage = page + 1;
-  if (response.reachedEnd === true || response.results.length < 20) state.status = "exhausted";
+  if (response.reachedEnd === true || (response.reachedEnd === undefined && response.results.length < 20)) state.status = "exhausted";
   return response.results.map((item, index) => normalizeProviderResult(
     "courtlistener", item, (page - 1) * 20 + index + 1, "cited_by", seed.canonicalKey,
   ));
@@ -398,7 +398,8 @@ async function fetchScholarPage(
   state.rawResults += response.results.length;
   state.pagesCompleted += 1;
   partition.pagesCompleted += 1;
-  if (response.results.length < 20) {
+  const fullExposureCap = offset >= 980 && response.results.length >= 20;
+  if (!fullExposureCap && (response.reachedEnd === true || (response.reachedEnd === undefined && response.results.length < 20))) {
     state.partitions.shift();
     state.completedPartitions += 1;
     finishScholarState(state);

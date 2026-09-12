@@ -182,6 +182,43 @@ test("cited-by downloads invoke summarization and resume keeps the flag", () => 
 }));
 
 
+test("cancellation during the final search summary preserves acquisition and resumes", () => fixture(async root => {
+  const events: string[] = [];
+  const { ctx, runtime } = setup(root, events);
+  const controller = new AbortController();
+  const result = await runLegalSearch({ ...options, summarize: true }, controller.signal, update => {
+    if (update.details?.status === "analyzing") controller.abort();
+  }, ctx, runtime);
+  assert.equal(result.status, "stopped");
+  assert.equal(result.resumePage, 1);
+  assert.equal(result.downloadSummary.downloaded, 1);
+  const resumed = await runLegalSearch({ ...options, run_id: result.runId }, undefined, undefined, ctx, runtime);
+  assert.equal(resumed.status, "completed");
+  assert.equal(resumed.results[0].summary?.status, "completed");
+  assert.equal(events.filter(e => e === "download").length, 1);
+}));
+
+test("cancellation during the final citing-case summary remains resumable", () => fixture(async root => {
+  const { ctx, runtime } = setup(root, []);
+  const seed = normalizeProviderResult("scholar", raw(1), 1);
+  await runtime.download(seed, join(root, "Cases"), "scholar", undefined, undefined, undefined);
+  const citedRuntime = { download: runtime.download,
+    enumerate: (...args: Parameters<typeof runCitedByReport>) => runCitedByReport(args[0], args[1], args[2], args[3], {
+      search: async () => ({ results: [raw(2)], reachedEnd: true }),
+    }),
+  };
+  const controller = new AbortController();
+  const result = await runLegalCitedBy({ action: "collect", case_key: seed.canonicalKey, jurisdiction: "6th circuit", pages_to_search: 1, max_cases_to_download: 1, summarize: true }, controller.signal, update => {
+    if (update.details?.status === "analyzing") controller.abort();
+  }, ctx, citedRuntime);
+  assert.equal(result.status, "paused");
+  assert.equal(result.downloadedCases, 1);
+  const resumed = await runLegalCitedBy({ action: "resume", case_key: seed.canonicalKey, run_id: result.runId }, undefined, undefined, ctx, citedRuntime);
+  assert.equal(resumed.status, "completed");
+  const downloads = JSON.parse(readFileSync(join(resumed.directory, "downloads.json"), "utf8"));
+  assert.equal(downloads[0].saved.summary.status, "completed");
+}));
+
 test("legacy metadata sidecars are preserved while being upgraded to opinion Markdown", () => fixture(async root => {
   const events: string[] = [];
   const { ctx, runtime } = setup(root, events);
@@ -265,6 +302,24 @@ test("saved-opinion resume observes deadline before starting the next summary", 
   assert.match(resumed.stopReason!, /Runtime limit/);
   assert.equal(resumed.downloadSummary.downloaded, 2);
   assert.ok(resumed.results.every(row => row.download_status === "downloaded"));
+}));
+
+test("increasing the download cap on resume acquires earlier listed cases", () => fixture(async root => {
+  const events: string[] = [];
+  const { ctx, runtime } = setup(root, events);
+  let blocked = true;
+  runtime.search = async (_provider, params) => {
+    const page = Number(params.page);
+    if (page === 2 && blocked) throw new Error("Temporary provider failure");
+    return { results: [raw(page)], reachedEnd: page === 2 };
+  };
+  const first = await runLegalSearch({ ...options, pages_to_search: 2, max_cases_to_download: 0 }, undefined, undefined, ctx, runtime);
+  assert.equal(first.resumePage, 2);
+  blocked = false;
+  const resumed = await runLegalSearch({ ...options, run_id: first.runId, max_cases_to_download: 1 }, undefined, undefined, ctx, runtime);
+  assert.equal(resumed.downloadSummary.downloaded, 1);
+  assert.equal(resumed.results[0].download_status, "downloaded");
+  assert.equal(events.filter(e => e === "download").length, 1);
 }));
 
 test("new sidecar summaries supersede stale failed run manifests", () => fixture(async root => {

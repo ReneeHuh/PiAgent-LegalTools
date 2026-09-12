@@ -1,36 +1,50 @@
-# Planning case-search terms
+# Choosing search terms
 
-Translate the issue into complementary searches; courts may describe the same issue differently. State the initial query plan before searching. Follow the agreed query count or task-wide budget; do not silently multiply full-search downloads across extra queries.
+Select useful concepts from the user's question: people/relationships, conduct, condition, doctrine, disputed element, procedure, or remedy. Learn vocabulary from reliable explanatory sources or reviewed opinions; unsupported legal labels remain hypotheses.
 
-## Build the query plan
+Distinguish:
 
-| Angle | What to search |
+- **Alternative wording:** store/supermarket; slipped/slip.
+- **Broader terms:** injury/fall injury.
+- **Different questions:** notice/creation of a condition. Searching them together does not make them legally equivalent.
+
+OR groups capture alternatives; AND or supported proximity connects selected concepts. Requiring every concept can hide useful decisions. Use exact phrases and exclusions deliberately; see [provider-search.md](provider-search.md).
+
+## Complementary queries
+
+Select useful variants rather than running every example:
+
+| Purpose | Wet-floor example |
 |---|---|
-| Legal concept | Claim, defense, doctrine, or statutory provision, plus plausible alternative labels |
-| Distinctive facts | Conduct, relationship, object, or setting that makes the dispute legally significant |
-| Procedural posture | The motion or review standard relevant to the task, such as dismissal or summary judgment |
-| Competing outcome | Rejected arguments, exceptions, missing elements, or the opposing party's position |
-| Known authority | A verified case name, citation, or provision that can reveal terminology and related decisions |
+| Broad facts | `store wet floor fall` |
+| Alternative wording | `supermarket liquid spill injury` |
+| Possible doctrine | `"premises liability" spill` |
+| One potential issue | `"constructive notice" spill` |
+| Another potential issue | `store employee created spill` |
+| Procedure, if relevant | `"slip and fall" "summary judgment"` |
 
-Choose useful angles from the user's facts; not every search needs every angle. Treat unfamiliar doctrine names as search hypotheses until supported by retrieved authority. Omit irrelevant names and incidental details that would hide analogous cases.
+Explain what each query investigates. These are hypotheses, not verified rules. Omit incidental details that hide analogous cases.
 
-## Example: an injury involving a wet store floor
+## Collaborate
 
-Illustrative query variants, not conclusions about applicable law:
+**User:** Find wet-store-floor cases in our agreed courts, results only.
 
-- `slip fall wet floor` or `store spill injury` — broad factual starting points without assuming a particular legal element.
-- `premises liability constructive notice spill` — a possible doctrinal formulation.
-- `slip fall inspection duration spill` — potentially significant evidence.
-- `slip fall summary judgment notice` — procedural focus, if relevant.
-- `slip fall insufficient evidence notice` — decisions rejecting the asserted basis for liability.
+**AI:** I'll start with wet-floor and spill wording, collecting listings without opinions.
 
-Run separate variants rather than joining every term into one restrictive query. Apply jurisdiction and date through the tool's fields. Use quotation marks for a distinctive phrase selectively, then try unquoted or alternate wording if results are sparse. Use only operators supported by the selected provider; do not assume identical syntax across providers.
+**After results:** Some listings concern inspections; others concern employees creating the condition. Did an employee create the wet floor, or is that unknown?
 
-## Refine from results
+**User:** An employee had just mopped.
 
-- **Too few:** Remove incidental facts or outcome terms; try synonyms, broader descriptions, and unquoted phrases before changing court/date scope.
-- **Too many:** Add the legally significant fact, relationship, element, or procedural posture. Use exclusions cautiously because they can hide contrary cases.
-- **Wrong topic:** Pair the ambiguous term with a more specific legal concept or factual setting.
-- **Useful terminology:** Adopt terms present in titles/snippets or reviewed opinions and run a complementary query within the agreed scope/budget.
+**AI:** I'll refine around mopping and warnings. These remain candidate listings, not verified holdings.
 
-For results-only searches, describe relevance as provisional based on listing metadata/snippets. Do not claim an opinion holds something without reviewing it. Report the queries actually run, coverage limits, and meaningful gaps. Deduplicate using tool identities while retaining which queries found each case; all exposed pages do not establish that all relevant cases were found.
+Use facts already supplied. Ask only when the answer changes the search; routine wording needs no repeated approval.
+
+## Refine
+
+- **Sparse:** Remove incidental facts, try synonyms, or relax phrase/proximity constraints before proposing wider courts/dates.
+- **Noisy:** Add a significant fact, relationship, or issue; avoid stacking all elements.
+- **Ambiguous:** Pair the misleading term with a more specific concept.
+- **Promising:** Adopt actual source terminology, identifying whether it came from a snippet or reviewed opinion.
+- **Tentative argument:** Explore relevant opposing facts or exceptions. Outcome words alone do not establish who prevailed on the issue.
+
+Consider citation research when authorized; results-only work does not authorize acquiring a seed solely to enable cited-by collection. Repetition can justify fewer additional variants, not unfinished agreed pagination. Preserve query provenance and budgets.

@@ -10,6 +10,7 @@ import {
   caseMarkdownMetadataRecords,
   extractOpinionText,
   mergeCases,
+  mergeCase,
   normalizeCitation,
   normalizeProviderResult,
   opinionMetadataMarkdownPath,
@@ -22,6 +23,22 @@ import {
   writeMarkdownMetadata,
   type NormalizedCase,
 } from "./core.ts";
+
+test("merging repeated provider observations fills missing cited-by metadata without mutating provenance", () => {
+  const first = normalizeProviderResult("courtlistener", {
+    title: "Example v. Sample", clusterId: "123", url: "https://www.courtlistener.com/opinion/123/example/",
+  }, 1);
+  const later = structuredClone(first);
+  later.sources[0].citedById = "999";
+  later.sources[0].snippet = "Later exposed snippet";
+  later.sources[0].sourceRank = 20;
+  const combined = mergeCase(first, later);
+  assert.equal(combined.sources.length, 1);
+  assert.equal(combined.sources[0].citedById, "999");
+  assert.equal(combined.sources[0].snippet, "Later exposed snippet");
+  assert.equal(combined.sources[0].sourceRank, 1);
+  assert.equal(first.sources[0].citedById, undefined);
+});
 
 test("download selection takes only the requested leading result items", () => {
   assert.deepEqual(selectDownloadCases(["first", "second", "third", "fourth", "fifth", "sixth"], 5), [

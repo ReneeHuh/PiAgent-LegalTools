@@ -1,4 +1,4 @@
 interface:
   display_name: "Case Law Research"
-  short_description: "List case results or search and download opinions"
-  default_prompt: "Use $case-law-research with my jurisdiction and results-only, quick, medium, or full choice from context; apply its preset limits and ask only for missing or unclear choices."
+  short_description: "Plan and refine case-law searches together"
+  default_prompt: "Use $case-law-research to plan and refine searches with me, ask focused questions when needed, and honor my court scope and results-only, quick, medium, or full choice."
