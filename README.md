@@ -17,7 +17,7 @@ The repository's `.pi/settings.json` loads this package after the project is tru
 
 ## Current implementation
 
-Version 0.1.0 establishes:
+Version 0.1.1 includes:
 
 - A valid Pi package manifest.
 - The implemented `summarize_case`, `case_chat`, and `verify_document_authorities` extensions.
@@ -103,7 +103,7 @@ To create a portable package from this package directory:
 npm run pack:release
 ```
 
-The archive is written to `dist/pi-legal-workbench-0.1.0.tgz`. Extract it, install its npm dependencies, and point `pi install` at the extracted directory as described in the guide.
+The archive is written to `dist/pi-legal-workbench-0.1.1.tgz`. Extract it, install its npm dependencies, and point `pi install` at the extracted directory as described in the guide.
 
 ## Extension surface
 

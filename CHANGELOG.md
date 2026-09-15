@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased — 0.1.0
+## 0.1.1 — 2026-09-14
+
+### Added
+
+- Browser selection for Chrome, Edge, and Opera, with separate browser profiles and session state.
+- Installed-browser flags in `legal_jurisdictions`, with Chrome as the default and no executable paths in the response.
+- Selected-result batch downloads from saved Scholar, CourtListener, and Justia searches.
+
+### Changed
+
+- Return compact search previews with saved-result references and history inspection.
+- Preserve browser selection when resuming research and pass multipart source context through every summarization stage.
+- Clarify research skill instructions, tool progress, and retry guidance.
+
+## 0.1.0
 
 ### Added
 

@@ -45,7 +45,7 @@ npm run check
 npm run pack:release
 ```
 
-This creates `dist/pi-legal-workbench-0.1.0.tgz`. The version in `package.json` determines the filename. The archive includes the extensions, skills, prompts, Python helpers, assets, documentation, and tests. It excludes `node_modules`, local Pi settings, case data outside those package directories, and Python bytecode caches. Runtime dependencies are downloaded during installation, so this is not an offline dependency bundle.
+This creates `dist/pi-legal-workbench-0.1.1.tgz`. The version in `package.json` determines the filename. The archive includes the extensions, skills, prompts, Python helpers, assets, documentation, and tests. It excludes `node_modules`, local Pi settings, case data outside those package directories, and Python bytecode caches. Runtime dependencies are downloaded during installation, so this is not an offline dependency bundle.
 
 When Python is installed, also run `npm run python:check` to check the DOCX helper's syntax.
 
@@ -58,8 +58,8 @@ If Python is available only in the virtual environment described in the Python g
 Copy the `.tgz` file to the destination computer. In PowerShell, adjust the archive path on the second line:
 
 ```powershell
-$installDir = Join-Path $env:USERPROFILE "PiPackages\pi-legal-workbench-0.1.0"
-$archive = Join-Path $env:USERPROFILE "Downloads\pi-legal-workbench-0.1.0.tgz"
+$installDir = Join-Path $env:USERPROFILE "PiPackages\pi-legal-workbench-0.1.1"
+$archive = Join-Path $env:USERPROFILE "Downloads\pi-legal-workbench-0.1.1.tgz"
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 tar -xzf $archive -C $installDir --strip-components=1
 Set-Location $installDir
@@ -90,6 +90,6 @@ The package now lives at the repository root, so it can be installed directly fr
 pi install git:github.com/OWNER/REPOSITORY
 ```
 
-For a fixed release, create and push a version tag, then install with a matching suffix such as `@v0.1.0`.
+For a fixed release, create and push a version tag, then install with a matching suffix such as `@v0.1.1`.
 
 Reference: [Pi's package documentation](https://pi.dev/docs/latest/packages).
