@@ -54,7 +54,7 @@ The response includes `runId`, scope, retrieval time, download totals, warnings,
 
 Inspect a row with `legal_search_history action=read`, `run_id`, and its `result_ref` for native metadata, original page/position, URL, source paths, and integrity. References stay valid when later retrieval changes rankings; a case key alone identifies the case, not a specific observed row. Full search details retain `provider_data`, `passage_source`, and source hashes. One call searches one provider. For supplemental Justia discovery, use `provider: "justia"`, `jurisdiction: "all"`, and omit year filters.
 
-All browser tools accept `browser: "chrome" | "edge"`. The LLM chooses, defaulting to Chrome. Omit it on resume or saved selections to retain the recorded choice. Chrome and Edge use separate persistent profiles and tab/session state. An explicit browser change on a search run uses the new browser and persists that choice.
+All browser tools accept `browser: "chrome" | "edge" | "opera"`. The LLM chooses, defaulting to Chrome. Omit it on resume or saved selections to retain the recorded choice. Chrome, Edge, and Opera use separate persistent profiles and tab/session state. An explicit browser change on a search run uses the new browser and persists that choice.
 
 To download selected rows, call `direct_download`:
 
@@ -101,6 +101,10 @@ Use a successfully downloaded, integrity-checked seed:
 Omitting `run_id` selects the newest collection for that case. Refresh preserves earlier runs, starts provider traversal anew, and reports newly observed case keys against the baseline snapshot. It inherits omitted court/year filters; `jurisdiction: "all"` removes the court restriction. To broaden inherited year bounds, supply explicit bounds. Resume preserves filters; only page/download limits may be raised. Fresh collections still default to all exposed pages and five downloads, so use explicit limits for a small exploratory run.
 
 Cited-by collection remains discovery, not treatment classification. Completion covers only the selected providers and exposed results. Refresh does not establish good-law status.
+
+## Browser availability
+
+`legal_jurisdictions` includes a `browsers` block before the first search: `default` is Chrome, and `installed` contains true/false flags for Chrome, Edge, and Opera. The response contains no executable paths. Use these flags to choose an installed browser and re-run the tool after browser installation changes. This check does not open a browser.
 
 ## History and review
 

@@ -30,6 +30,21 @@ Return the complete canonical jurisdiction catalog accepted by the other public 
 
 The no-argument result includes a flat `jurisdictions` list, its `count`, nested `groups.unrestricted`, `groups.stateAppellate`, `groups.federalCourts`, `groups.federalAppellate`, and `groups.federalDistrict`, plus `limitations.federalDistrictCourts`. Use one returned canonical key for `jurisdiction`; use `all` only for an intentionally unrestricted search. Common state abbreviations, `SCOTUS`, spelled circuit ordinals, and listed CourtListener district IDs remain accepted aliases. The shared vocabulary includes 93 exact federal district or territorial district courts; the Northern Mariana Islands is omitted because Scholar currently exposes no exact picker entry.
 
+`legal_jurisdictions` also returns a `browsers` block in both model-visible text and structured details:
+
+```json
+{
+  "default": "chrome",
+  "installed": {
+    "chrome": true,
+    "edge": true,
+    "opera": true
+  }
+}
+```
+
+This example assumes all three are installed; missing browsers report `false`. The response includes no executable paths. The check looks for executable files without opening a browser. The LLM honors an explicit user choice, otherwise prefers Chrome when installed or chooses another installed browser. A missing requested browser or all-false result is reported. Re-run the catalog after browser installation changes.
+
 ### `legal_search`
 
 Search exactly one selected provider and preserve every parsed record from the requested result pages. The model-facing output previews up to 20 compact rows with pagination through saved history. Page 1 is opened through the rendered search form; later pages are reached only by clicking the provider's rendered **Next** link. The workflow does not jump to a constructed page or result-offset URL.
@@ -108,7 +123,7 @@ Open or focus a visible provider browser for manual inspection or verification:
 {"provider":"courtlistener"}
 ```
 
-Accepts `provider` and optional `browser: "chrome" | "edge"`. The tool always navigates to the configured HTTPS homepage for Scholar, CourtListener, or Justia.
+Accepts `provider` and optional `browser: "chrome" | "edge" | "opera"`. The tool always navigates to the configured HTTPS homepage for Scholar, CourtListener, or Justia.
 
 ## Storage
 
@@ -130,9 +145,9 @@ Title/court/year and docket/court/year alone never merge records. Every parsed s
 
 ## Operational boundary
 
-Provider browsing uses fixed HTTPS homepages and is visible and delayed. Browser tools accept `browser: "chrome" | "edge"`; the LLM chooses and defaults to Chrome. Resumes and saved selections inherit the recorded browser when omitted. An explicit browser change on an ordinary or cited-by run persists the new choice. Named-case find/download handles stay bound to their original browser.
+Provider browsing uses fixed HTTPS homepages and is visible and delayed. Browser tools accept `browser: "chrome" | "edge" | "opera"`; the LLM chooses and defaults to Chrome. Resumes and saved selections inherit the recorded browser when omitted. An explicit browser change on an ordinary or cited-by run persists the new choice. Named-case find/download handles stay bound to their original browser.
 
-Providers share a persistent profile within each browser: `<active Pi profile>/legal-research-chrome-profile` or `legal-research-edge-profile`. Chrome and Edge use separate debugging endpoints, launch attempts, tabs, navigation sessions, and pacing state. Profiles follow Pi's `getAgentDir()` and `PI_CODING_AGENT_DIR`; set the profile before starting Pi and restart Pi after changing it. Existing data is not automatically migrated between browsers or profiles. If an older executable override points Chrome at Edge, move that override to `LEGAL_RESEARCH_EDGE_PATH` and select Edge explicitly.
+Providers share a persistent profile within each browser: `<active Pi profile>/legal-research-chrome-profile`, `legal-research-edge-profile`, or `legal-research-opera-profile`. Chrome, Edge, and Opera use separate debugging endpoints, launch attempts, tabs, navigation sessions, and pacing state. Profiles follow Pi's `getAgentDir()` and `PI_CODING_AGENT_DIR`; set the profile before starting Pi and restart Pi after changing it. Existing data is not automatically migrated between browsers or profiles. If an older executable override points Chrome at Edge, move that override to `LEGAL_RESEARCH_EDGE_PATH` and select Edge explicitly.
 
 `legal_search` resumes with `run_id`; cited-by work remains checkpointed. Optional `runtime_limit_minutes` is checked between operations, so an in-flight operation can finish after the boundary. Omitting it applies no tool deadline. Provider verification, throttling, cancellation, or an external host limit can stop work. Even a reported provider end does not prove complete coverage. `legal_search` and `direct_download action=download_results` support all three providers; cited-by and named-case find use Scholar and CourtListener.
 
@@ -144,6 +159,7 @@ Browser-side interruptions (an unsolved CAPTCHA or verification page, an anti-bo
 
 - `LEGAL_RESEARCH_CHROME_PATH`: path to Google Chrome when it is not in a standard location. The older `SCHOLAR_CHROME_PATH` and `COURTLISTENER_CHROME_PATH` names remain accepted for Chrome.
 - `LEGAL_RESEARCH_EDGE_PATH`: path to Microsoft Edge when it is not in a standard location. Explicit Edge selection never falls back to Chrome.
+- `LEGAL_RESEARCH_OPERA_PATH`: path to Opera's executable for a custom or portable installation. Windows discovery also checks numeric version directories beneath standard Opera installation locations and chooses the newest executable. Opera uses the documented [remote-debugging connection](https://github.com/operasoftware/operachromiumdriver/blob/master/docs/desktop.md).
 - `LEGAL_RESEARCH_ALERT_SOUND`: set to `off` (or `0`, `false`, `no`) to silence the alert played when a CAPTCHA or verification page needs the user's attention. The older `SCHOLAR_CAPTCHA_SOUND` and `COURTLISTENER_VERIFICATION_SOUND` names remain accepted.
 
 ## Timing

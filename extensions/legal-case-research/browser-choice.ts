@@ -1,12 +1,16 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-export type BrowserChoice = "chrome" | "edge";
+export const BROWSER_CHOICES = ["chrome", "edge", "opera"] as const;
+export type BrowserChoice = typeof BROWSER_CHOICES[number];
+export const BROWSER_NAMES: Record<BrowserChoice, string> = {
+  chrome: "Google Chrome", edge: "Microsoft Edge", opera: "Opera",
+};
 const browserContext = new AsyncLocalStorage<BrowserChoice>();
 
 export function validateBrowser(value: unknown): BrowserChoice {
   if (value === undefined) return "chrome";
-  if (value === "chrome" || value === "edge") return value;
-  throw new Error('browser must be "chrome" or "edge".');
+  if (value === "chrome" || value === "edge" || value === "opera") return value;
+  throw new Error('browser must be "chrome", "edge", or "opera".');
 }
 
 export function currentBrowser(): BrowserChoice {

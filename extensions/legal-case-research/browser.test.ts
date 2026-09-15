@@ -26,6 +26,7 @@ test("browser selection defaults to Chrome and isolates async work, navigation, 
   const browser = exampleBrowser();
   const tab = { targetId: "same-target-id", marker: "1-test" };
   assert.equal(validateBrowser(undefined), "chrome");
+  assert.equal(validateBrowser("opera"), "opera");
   assert.throws(() => validateBrowser("firefox"), /chrome.*edge/);
   browser.rememberNavigationSession("run", { tab, page: 4 });
   browser.acquireTabLease(tab);
@@ -37,6 +38,12 @@ test("browser selection defaults to Chrome and isolates async work, navigation, 
     assert.equal(browser.isLeased(tab.targetId), false);
     assert.equal(browser.timingMode, "fast");
     browser.rememberNavigationSession("run", { tab: { ...tab, marker: "edge" }, page: 1 });
+  }), withBrowser("opera", async () => {
+    await Promise.resolve();
+    assert.equal(currentBrowser(), "opera");
+    assert.equal(browser.getNavigationSession("run"), undefined);
+    assert.equal(browser.isLeased(tab.targetId), false);
+    browser.rememberNavigationSession("run", { tab: { ...tab, marker: "opera" }, page: 2 });
   }), withBrowser("chrome", async () => {
     await Promise.resolve();
     assert.equal(currentBrowser(), "chrome");
@@ -46,6 +53,8 @@ test("browser selection defaults to Chrome and isolates async work, navigation, 
   })]);
   assert.equal(currentBrowser(), "chrome");
   assert.equal(browser.getNavigationSession("run")?.page, 4);
+  assert.equal(withBrowser("edge", () => browser.getNavigationSession("run")?.page), 1);
+  assert.equal(withBrowser("opera", () => browser.getNavigationSession("run")?.page), 2);
 });
 
 test("transient browser failures are recognized by type, not by message text", () => {

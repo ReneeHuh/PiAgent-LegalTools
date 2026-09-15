@@ -125,16 +125,16 @@ test("observation references distinguish duplicates and remain stable after reca
   assert.equal(calls, 0, "validate the entire batch before acquiring the first row");
 }));
 
-test("search resume retains its browser and an explicit change persists without sharing navigation state", () => fixture(async ctx => {
+test("search resume retains Opera and an explicit change persists without sharing navigation state", () => fixture(async ctx => {
   const seen: string[] = [];
   const runtime = { now: Date.now, search: async () => { seen.push(currentBrowser()); return { results: [raw("scholar", 1)] }; },
     download: async () => { throw new Error("unexpected download"); } };
   const request = { search_term: "evidence", provider: "scholar" as const, jurisdiction: "all", pages_to_search: 1, max_cases_to_download: 0 };
-  const first = await runLegalSearch({ ...request, browser: "edge" }, undefined, undefined, ctx, runtime);
+  const first = await runLegalSearch({ ...request, browser: "opera" }, undefined, undefined, ctx, runtime);
   await runLegalSearch({ ...request, run_id: first.runId, resume_page: 2 }, undefined, undefined, ctx, runtime);
-  assert.deepEqual(seen, ["edge", "edge"]);
+  assert.deepEqual(seen, ["opera", "opera"]);
   await runLegalSearch({ ...request, run_id: first.runId, resume_page: 3, browser: "chrome" }, undefined, undefined, ctx, runtime);
-  assert.deepEqual(seen, ["edge", "edge", "chrome"]);
+  assert.deepEqual(seen, ["opera", "opera", "chrome"]);
   assert.equal(readSearchRun(ctx.cwd, first.runId!).manifest.request.browser, "chrome");
 }));
 

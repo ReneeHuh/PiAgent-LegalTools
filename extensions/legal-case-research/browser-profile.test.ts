@@ -32,7 +32,7 @@ test("browser profile expands a tilde in the selected Pi profile", () => {
   assert.equal(profileAtStartup("~/.pi/pilegal"), join(homedir(), ".pi", "pilegal", "legal-research-chrome-profile"));
 });
 
-test("Edge endpoint discovery cannot reuse the running Chrome profile endpoint", () => {
+test("Chrome, Edge, and Opera discover separate profile endpoints", () => {
   const parent = realpathSync(tmpdir());
   const root = realpathSync(mkdtempSync(join(parent, "legal-browser-endpoints-")));
   try {
@@ -40,7 +40,7 @@ test("Edge endpoint discovery cannot reuse the running Chrome profile endpoint",
       import { mkdirSync, writeFileSync } from "node:fs";
       import { join } from "node:path";
       import { browserProfileDirectory, ensureChrome } from ${JSON.stringify(new URL("./browser.ts", import.meta.url).href)};
-      for (const [browser, port] of [["chrome", 40101], ["edge", 40102]]) {
+      for (const [browser, port] of [["chrome", 40101], ["edge", 40102], ["opera", 40103]]) {
         const directory = browserProfileDirectory(browser);
         mkdirSync(directory, {recursive: true});
         writeFileSync(join(directory, "DevToolsActivePort"), port + "\\n/devtools/browser/" + browser);
@@ -48,17 +48,19 @@ test("Edge endpoint discovery cannot reuse the running Chrome profile endpoint",
       const probed = [];
       globalThis.fetch = async url => {
         probed.push(url);
-        const browser = url.includes("40102") ? "edge" : "chrome";
+        const browser = url.includes("40103") ? "opera" : url.includes("40102") ? "edge" : "chrome";
         return {ok: true, json: async () => ({webSocketDebuggerUrl: url.replace("http:", "ws:").replace("/json/version", "/devtools/browser/" + browser)})};
       };
       const chrome = await ensureChrome("https://scholar.google.com/", undefined, "chrome");
       const edge = await ensureChrome("https://scholar.google.com/", undefined, "edge");
-      console.log(JSON.stringify({chrome, edge, probed}));
+      const opera = await ensureChrome("https://scholar.google.com/", undefined, "opera");
+      console.log(JSON.stringify({chrome, edge, opera, probed}));
     `], { env: { ...process.env, PI_CODING_AGENT_DIR: root }, encoding: "utf8", timeout: 30_000 });
     const found = JSON.parse(output.trim());
     assert.equal(found.chrome.httpUrl, "http://127.0.0.1:40101");
     assert.equal(found.edge.httpUrl, "http://127.0.0.1:40102");
-    assert.deepEqual(found.probed, ["http://127.0.0.1:40101/json/version", "http://127.0.0.1:40102/json/version"]);
+    assert.equal(found.opera.httpUrl, "http://127.0.0.1:40103");
+    assert.deepEqual(found.probed, ["http://127.0.0.1:40101/json/version", "http://127.0.0.1:40102/json/version", "http://127.0.0.1:40103/json/version"]);
   } finally {
     assert.equal(dirname(root).toLowerCase(), parent.toLowerCase());
     assert.ok(basename(root).startsWith("legal-browser-endpoints-"));

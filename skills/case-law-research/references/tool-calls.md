@@ -6,6 +6,8 @@ Apply the presets and scope rules in [SKILL.md](../SKILL.md). Use tool schemas f
 
 Call `legal_jurisdictions({})` and reuse its canonical keys and reported limitations. Use separate calls for multiple scopes; `all` means intentionally unrestricted. Citing-case jurisdiction is independent of the seed's court. Check candidate court metadata before manual downloads and after automatic downloads; resolve conflicts before reliance.
 
+The same response includes `browsers.default` (Chrome) and `browsers.installed` with true/false values for `chrome`, `edge`, and `opera`. No executable paths are returned. Choose a browser marked true, preserving explicit user preferences. Call `legal_jurisdictions` again after browser installation changes to refresh these flags. The check does not open a browser.
+
 ## Ordinary search
 
 Results-only example:
@@ -38,7 +40,7 @@ For interrupted work, pass:
 - `resume_page`: returned `resumePage`.
 - `pages_to_search`: returned `pagesRemaining`.
 - Unchanged query/provider/court/year filters and the original total download cap: five stays five after three successes; results-only stays zero with `summarize: false`.
-- Omit `browser` to retain the saved Chrome/Edge choice. An explicit change uses separate browser state and becomes the run's saved choice.
+- Omit `browser` to retain the saved Chrome/Edge/Opera choice. An explicit change uses separate browser state and becomes the run's saved choice.
 
 Changed queries/filters require a new run. `refresh_of` starts a new dated retrieval linked to an earlier run; do not combine with `run_id`. Preserve remaining task-wide budgets across runs. Omitted runtime limit imposes no tool deadline.
 

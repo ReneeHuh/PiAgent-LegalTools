@@ -1,23 +1,21 @@
-// Visible Chrome/Edge automation through the Chrome DevTools Protocol and
+// Visible Chrome/Edge/Opera automation through the Chrome DevTools Protocol and
 // Node's built-in WebSocket. Each browser has a dedicated persistent profile
 // under the active Pi profile. Windows remain open between calls and restarts;
 // the user can inspect them and complete provider verification there.
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir, type AgentToolUpdateCallback } from "@earendil-works/pi-coding-agent";
 import { currentBrowser, type BrowserChoice } from "./browser-choice.ts";
+import { findBrowserExecutable } from "./browser-discovery.ts";
+export { CHROME_PATH_ENV, EDGE_PATH_ENV, OPERA_PATH_ENV } from "./browser-discovery.ts";
 
 /** One persistent Chrome user-data directory shared by providers in the active Pi profile. */
 export const LEGAL_RESEARCH_CHROME_PROFILE_DIR = join(getAgentDir(), "legal-research-chrome-profile");
 export function browserProfileDirectory(browser: BrowserChoice): string {
-  return browser === "chrome" ? LEGAL_RESEARCH_CHROME_PROFILE_DIR : join(getAgentDir(), "legal-research-edge-profile");
+  return browser === "chrome" ? LEGAL_RESEARCH_CHROME_PROFILE_DIR : join(getAgentDir(), `legal-research-${browser}-profile`);
 }
 
-/** Override the browser executable. Provider-specific legacy names remain accepted. */
-export const CHROME_PATH_ENV = "LEGAL_RESEARCH_CHROME_PATH";
-export const EDGE_PATH_ENV = "LEGAL_RESEARCH_EDGE_PATH";
-const LEGACY_CHROME_PATH_ENV = ["SCHOLAR_CHROME_PATH", "COURTLISTENER_CHROME_PATH"];
 /** Set to off/0/false/no to silence the CAPTCHA and verification alert sound. */
 export const ALERT_SOUND_ENV = "LEGAL_RESEARCH_ALERT_SOUND";
 const LEGACY_ALERT_SOUND_ENV = ["SCHOLAR_CAPTCHA_SOUND", "COURTLISTENER_VERIFICATION_SOUND"];
@@ -170,28 +168,7 @@ function configuredEnv(primary: string, legacy: readonly string[]): string | und
 }
 
 export function findChrome(browser: BrowserChoice = "chrome"): string {
-  const pf = process.env.ProgramFiles ?? "C:\\Program Files";
-  const pf86 = process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
-  const local = process.env.LOCALAPPDATA ?? "";
-  const candidates = (browser === "edge" ? [
-    configuredEnv(EDGE_PATH_ENV, []),
-    join(pf, "Microsoft\\Edge\\Application\\msedge.exe"),
-    join(pf86, "Microsoft\\Edge\\Application\\msedge.exe"),
-    local && join(local, "Microsoft\\Edge\\Application\\msedge.exe"),
-    "/usr/bin/microsoft-edge",
-    "/opt/microsoft/msedge/msedge",
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-  ] : [
-    configuredEnv(CHROME_PATH_ENV, LEGACY_CHROME_PATH_ENV),
-    join(pf, "Google\\Chrome\\Application\\chrome.exe"),
-    join(pf86, "Google\\Chrome\\Application\\chrome.exe"),
-    local && join(local, "Google\\Chrome\\Application\\chrome.exe"),
-    "/usr/bin/google-chrome",
-    "/opt/google/chrome/chrome",
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  ]).filter(Boolean) as string[];
-  for (const candidate of candidates) if (existsSync(candidate)) return candidate;
-  throw new Error(`${browser === "edge" ? "Microsoft Edge" : "Google Chrome"} not found. Install it or set ${browser === "edge" ? EDGE_PATH_ENV : CHROME_PATH_ENV} to its executable.`);
+  return findBrowserExecutable(browser);
 }
 
 export type CdpEndpoint = { httpUrl: string; webSocketUrl: string };

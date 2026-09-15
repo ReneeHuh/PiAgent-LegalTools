@@ -6,7 +6,7 @@ This directory is already a Pi package. Its `package.json` declares four extensi
 
 - Node.js 22 or later and npm.
 - Pi installed and available as `pi` in your terminal. The development dependency is Pi 0.84.4; archive installation and resource loading were also verified with Pi 0.85.1.
-- Google Chrome (default) or Microsoft Edge for browser-based case research. Tools accept `browser: "chrome" | "edge"`; executable overrides are `LEGAL_RESEARCH_CHROME_PATH` and `LEGAL_RESEARCH_EDGE_PATH`. See [browser configuration](extensions/legal-case-research/README.md#configuration).
+- Google Chrome (default), Microsoft Edge, or Opera for browser-based case research. `legal_jurisdictions` reports installed/not-installed status; browser tools accept `browser: "chrome" | "edge" | "opera"`. See [browser configuration](extensions/legal-case-research/README.md#configuration).
 - A configured Pi model/provider for summaries, case chat, and model-assisted verification.
 - Python and [the Python dependencies](python/README.md) only if you want to use the DOCX helper. Python is not required to load the Pi package.
 

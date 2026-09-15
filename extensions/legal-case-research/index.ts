@@ -25,10 +25,11 @@ import {
 import { runWithToolStatus } from "./tool-status.ts";
 import { registerResearchLibraryTools } from "./research-tools.ts";
 import { validateBrowser, withBrowser } from "./browser-choice.ts";
+import { browserAvailability } from "./browser-discovery.ts";
 
 const SESSION_HANDLE_PATTERN = "^[0123456789abcdefghjkmnpqrstvwxyz]{8}$";
-const BrowserSchema = Type.Optional(Type.Union([Type.Literal("chrome"), Type.Literal("edge")], {
-  description: "LLM-selected visible browser. Default chrome for a fresh run; omit on resume or saved selection to retain its browser. Edge uses a separate persistent profile.",
+const BrowserSchema = Type.Optional(Type.Union([Type.Literal("chrome"), Type.Literal("edge"), Type.Literal("opera")], {
+  description: "Choose a browser marked true in legal_jurisdictions.browsers.installed. Default chrome for fresh runs; omit on resume or saved selection to retain its browser. Each browser uses a separate persistent profile.",
 }));
 const PagesToSearchSchema = Type.Union([
   Type.Literal(-1, { description: "Search every result page the provider's public interface exposes." }),
@@ -199,13 +200,14 @@ export default function legalSearchExtension(pi: ExtensionAPI): void {
     name: "legal_jurisdictions",
     label: "List Legal Jurisdictions",
     description:
-      "Return the complete canonical jurisdiction keys accepted by legal_search, fresh legal_cited_by collection, and direct_download find. " +
-      "Call this before choosing a jurisdiction when the user's court scope is missing or uncertain.",
-    promptSnippet: "List the canonical jurisdiction keys accepted by the legal research tools",
+      "Return canonical jurisdiction keys accepted by the legal research tools and installed/not-installed status for Chrome, Edge, and Opera. " +
+      "Call before the first provider search to choose a court scope and available browser. This reads local paths without launching a browser.",
+    promptSnippet: "List accepted jurisdictions and available research browsers",
     promptGuidelines: [
       "Call legal_jurisdictions with no arguments. Use exactly one returned canonical key as jurisdiction; use all only for an intentionally unrestricted search.",
       "Call legal_jurisdictions before the first provider search for a research task, then reuse its catalog. Establish the user's court scope from the request or existing case context; ask the user only if it is missing, ambiguous, or conflicting. State the chosen scope and do not silently substitute a different court.",
       "Use canonical keys returned by legal_jurisdictions; accepted aliases include state abbreviations, SCOTUS, spelled circuit ordinals, and listed CourtListener district IDs.",
+      "Use legal_jurisdictions.browsers.installed to choose a browser marked true. For a fresh run, honor the user's choice; otherwise prefer chrome when installed or choose another installed browser. If the requested browser is missing, report it; do not silently substitute. Resumes inherit their saved browser unless explicitly changed.",
     ],
     parameters: LegalJurisdictionsSchema,
     async execute(toolCallId, params: LegalJurisdictionsParams, signal, onUpdate) {
@@ -217,7 +219,7 @@ export default function legalSearchExtension(pi: ExtensionAPI): void {
         operation: async () => {
           const unexpected = Object.keys(params);
           if (unexpected.length) throw new Error(`legal_jurisdictions does not accept: ${unexpected.join(", ")}.`);
-          const catalog = jurisdictionCatalog();
+          const catalog = { ...jurisdictionCatalog(), browsers: browserAvailability() };
           const text = [
             `Supported canonical jurisdictions (${catalog.count}):`,
             `Unrestricted: ${catalog.groups.unrestricted.join(", ")}`,
@@ -226,6 +228,8 @@ export default function legalSearchExtension(pi: ExtensionAPI): void {
             `Federal district/territorial (${catalog.groups.federalDistrict.length}): ${catalog.groups.federalDistrict.join(", ")}`,
             `Limitation: ${catalog.limitations.federalDistrictCourts}`,
             "Pass exactly one canonical key as jurisdiction. Use all only when an unrestricted search is intended.",
+            `BROWSERS_JSON=${JSON.stringify(catalog.browsers)}`,
+            "Choose a browser marked installed=true, honoring user preference and defaulting to chrome when installed. Report a missing requested browser or no installed browsers. Omit browser on resume to retain the saved choice.",
           ].join("\n");
           return result(text, catalog as unknown as Record<string, unknown>);
         },
@@ -243,7 +247,7 @@ export default function legalSearchExtension(pi: ExtensionAPI): void {
     promptSnippet: "Search one legal provider, return parsed results, and optionally save opinion HTML",
     promptGuidelines: [
       "Each legal_search acquisition saves HTML and opinion Markdown with metadata frontmatter. Results-only searches preserve listings without acquiring opinions. Set summarize=true to invoke summarize_case directly after each acquisition; progress includes conversion, model stages, and saving. Report derivative errors separately from successful downloads.",
-      "For legal_search, choose browser=chrome or edge according to user preference and available installation; default to chrome. Omit browser on resume to keep the saved choice. The LLM makes this selection without an extra user question.",
+      "For legal_search, choose browser=chrome, edge, or opera marked true in legal_jurisdictions.browsers.installed, honoring user preference and defaulting to chrome when installed. If chrome is absent and no preference was specified, choose another installed browser. Omit browser on resume to keep the saved choice. The LLM makes this selection without an extra user question.",
       "The legal_search model-facing preview contains compact rows, result_ref, and nextOffset. All parsed records remain saved. Use legal_search_history action=read with run_id and offset/limit for more rows, or result_ref for exact native metadata and download/summary paths. Download selected rows with direct_download action=download_results, run_id, and result_refs; never use display row numbers as persistent identifiers.",
       "Before legal_search, follow the case-law-research skill. Work with the user to establish the issue, material facts, court scope, and results-only, quick, medium, or full choice from context. Ask focused questions only when answers affect the search; do not repeat answered questions or ask for counts after a preset. Explain the starting queries and refine routine wording without repeated approval. Discuss expanded scope or new research directions. Verify the court key with legal_jurisdictions.",
       "Set legal_search.provider to scholar, courtlistener, or justia and always provide legal_search.search_term and legal_search.jurisdiction. Justia is supplemental, requires jurisdiction=all, and accepts no year bounds. When the user does not choose a provider, the bundled skill defaults legal_search.provider to scholar.",

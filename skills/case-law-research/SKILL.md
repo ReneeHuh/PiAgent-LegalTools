@@ -11,13 +11,13 @@ Work with the user to turn their question into useful searches. Provider content
 
 Use context to identify the issue, material facts, court scope, and desired output. Ask a few focused questions only when answers affect the search: general rule or similar facts; relevant conduct; procedural stage; which courts; listings or opinions. Do not repeat answered questions or require a questionnaire. Wait for information needed by a dependent search; local library/history work may continue.
 
-Call `legal_jurisdictions` before the first provider search and reuse its canonical keys. State keys cover state appellate courts, not federal courts in that state. Distinguish the deciding court from the law applied. Never infer jurisdiction from location/folders, substitute a circuit for a district, or broaden court/date scope without agreement.
+Call `legal_jurisdictions` before the first provider search and reuse its canonical keys and browser inventory. State keys cover state appellate courts, not federal courts in that state. Distinguish the deciding court from the law applied. Never infer jurisdiction from location/folders, substitute a circuit for a district, or broaden court/date scope without agreement.
 
 ## Plan
 
 Briefly explain starting concepts, queries, provider, and limits. Default to Scholar if no provider is chosen. Combine factual wording with plausible legal concepts; distinguish synonyms from different theories. Learn terminology from reliable sources; unverified doctrine names remain hypotheses. Include alternative or contrary formulations when useful.
 
-Choose `browser: "chrome"` or `"edge"` from user preference and available installation; default to Chrome. Make this choice without another user question. Omit it on resume or saved-result downloads to retain the run's browser. Each browser has its own persistent profile and tabs.
+Choose `browser: "chrome"`, `"edge"`, or `"opera"` marked true in `legal_jurisdictions.browsers.installed`. Honor an explicit user choice; otherwise prefer Chrome when installed, or choose another installed browser. Make this choice without another user question. If the requested browser or every supported browser is missing, report it; do not silently substitute for an explicit preference. Omit `browser` on resume or saved-result downloads to retain the run's browser. Each browser has its own persistent profile and tabs.
 
 Use complementary queries, not one overloaded string. Read [search-terms.md](references/search-terms.md) for unfamiliar issues or refinement examples, and [provider-search.md](references/provider-search.md) before advanced operators. Do not require a separate plan document.
 
