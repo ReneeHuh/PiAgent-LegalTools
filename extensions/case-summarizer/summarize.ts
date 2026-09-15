@@ -9,6 +9,8 @@ import {
   buildMultipartCandidatePrompt,
   buildMultipartFinalPrompt,
   CANDIDATE_ROLES,
+  opinionPartContext,
+  type PartialOpinionSummary,
   type SummaryRequest,
 } from "./prompts.ts";
 import { parseCaseSummary, parseSummaryAudit, type StructuredCaseSummary, type SummaryAudit } from "./schema.ts";
@@ -183,6 +185,7 @@ export async function runCaseSummarizer(
   };
   const cache = { cacheRetention: "short" as const, sessionId: randomUUID() };
   const candidates: StructuredCaseSummary[] = [];
+  const partials: PartialOpinionSummary[] = [];
   if (parts) {
     for (const [index, part] of parts.entries()) {
       throwIfAborted(signal);
@@ -191,7 +194,7 @@ export async function runCaseSummarizer(
       });
       candidates.push(await runValidatedModelCall(ctx, {
         stage: `part:${index + 1}-of-${parts.length}`,
-        prompt: buildMultipartCandidatePrompt(part, request, index + 1, parts.length),
+        prompt: buildMultipartCandidatePrompt(part, request, index + 1, parts.length, opinionPartContext(parts, index)),
         maxOutputTokens: 5_000,
         signal, cache, onCall, onRetry,
         validate: text => {
@@ -200,6 +203,7 @@ export async function runCaseSummarizer(
           return candidate;
         },
       }));
+      partials.push({ ...opinionPartContext(parts, index), summary: candidates.at(-1)! });
     }
   } else {
     for (const [index, role] of CANDIDATE_ROLES.entries()) {
@@ -231,7 +235,7 @@ export async function runCaseSummarizer(
   const audit = await runValidatedModelCall(ctx, {
     stage: "combined-audit",
     prompt: parts
-      ? buildMultipartAuditPrompt(auditSource, request, candidates)
+      ? buildMultipartAuditPrompt(auditSource, request, partials)
       : buildAuditPrompt(source, request, candidates),
     maxOutputTokens: 5_000,
     signal, cache, onCall, onRetry,
@@ -251,7 +255,7 @@ export async function runCaseSummarizer(
   const parsedFinal = await runValidatedModelCall(ctx, {
     stage: "final-reconstruction",
     prompt: parts
-      ? buildMultipartFinalPrompt(auditSource, request, candidates, audit)
+      ? buildMultipartFinalPrompt(auditSource, request, partials, audit)
       : buildFinalPrompt(source, request, candidates, audit),
     maxOutputTokens: 7_000,
     signal, cache, onCall, onRetry,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { runWithToolStatus } from "./tool-status.ts";
 
-test("runWithToolStatus emits start, scoped progress, and completion updates", async () => {
+test("runWithToolStatus preserves a stopped workflow and its recovery fields in terminal progress", async () => {
   const updates: any[] = [];
   const output = await runWithToolStatus({
     tool: "legal_search",
@@ -13,18 +13,21 @@ test("runWithToolStatus emits start, scoped progress, and completion updates", a
         content: [{ type: "text", text: "Searching Scholar page 1." }],
         details: { phase: "search", page: 1 },
       });
-      return { content: [], details: { status: "stopped" } };
+      return { content: [], details: { status: "stopped", runId: "saved-run", resumePage: 2, pagesRemaining: 3 } };
     },
   });
 
   assert.equal(output.details.status, "stopped");
   assert.equal(updates.length, 3);
-  assert.deepEqual(updates.map((update) => update.details.phase), ["starting", "search", "completed"]);
-  assert.deepEqual(updates.map((update) => update.details.status), ["running", "running", "completed"]);
+  assert.deepEqual(updates.map((update) => update.details.phase), ["starting", "search", "stopped"]);
+  assert.deepEqual(updates.map((update) => update.details.status), ["running", "running", "stopped"]);
   assert.ok(updates.every((update) => update.details.tool === "legal_search"));
   assert.ok(updates.every((update) => update.details.toolCallId === "call-17"));
   assert.equal(updates[1].details.message, "Searching Scholar page 1.");
   assert.equal(updates[2].details.resultStatus, "stopped");
+  assert.equal(updates[2].details.runId, "saved-run");
+  assert.equal(updates[2].details.resumePage, 2);
+  assert.equal(updates[2].details.pagesRemaining, 3);
 });
 
 test("runWithToolStatus emits failure and rethrows", async () => {

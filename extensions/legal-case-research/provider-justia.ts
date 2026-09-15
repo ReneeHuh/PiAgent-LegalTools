@@ -1,4 +1,4 @@
-// Justia site-search discovery and opinion capture through the shared visible Chrome window.
+// Justia site-search discovery and opinion capture through the shared visible browser window.
 import type { AgentToolUpdateCallback } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
 import {
@@ -137,7 +137,7 @@ async function capturePage(
       {
         detected: "Justia security verification detected; waiting up to 120 seconds for it to clear in the visible browser.",
         detectedAgain: "Justia security verification detected again; waiting up to 120 seconds for it to clear.",
-        unsolved: "Justia security verification is still open. Complete it in the visible Chrome window, then retry.",
+        unsolved: "Justia security verification is still open. Complete it in the visible browser window, then retry.",
         cleared: "Justia security verification cleared; continuing the request.",
       }, signal, onStatus,
     );

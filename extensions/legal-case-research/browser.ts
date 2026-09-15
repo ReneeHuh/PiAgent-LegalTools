@@ -1,24 +1,22 @@
-// Shared visible-Chrome automation for the legal-research providers.
-//
-// Transport: a real, visible Chrome window driven over the Chrome DevTools
-// Protocol using Node's built-in WebSocket (Node 22+, no npm dependencies).
-// Plain fetch and headless Chrome are served anti-bot blocks by the providers;
-// a headful Chrome with a persistent profile is not. The window is shared with
-// the user: it stays open between tool calls and across pi restarts, the user
-// can browse in it, and CAPTCHAs or verification pages are solved right in the
-// window while the tool waits. Chrome runs on a dedicated profile under
-// <active Pi profile>/legal-research-chrome-profile, never the user's daily one.
+// Visible Chrome/Edge automation through the Chrome DevTools Protocol and
+// Node's built-in WebSocket. Each browser has a dedicated persistent profile
+// under the active Pi profile. Windows remain open between calls and restarts;
+// the user can inspect them and complete provider verification there.
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir, type AgentToolUpdateCallback } from "@earendil-works/pi-coding-agent";
+import { currentBrowser, type BrowserChoice } from "./browser-choice.ts";
 
 /** One persistent Chrome user-data directory shared by providers in the active Pi profile. */
 export const LEGAL_RESEARCH_CHROME_PROFILE_DIR = join(getAgentDir(), "legal-research-chrome-profile");
-const DEVTOOLS_ACTIVE_PORT_FILE = join(LEGAL_RESEARCH_CHROME_PROFILE_DIR, "DevToolsActivePort");
+export function browserProfileDirectory(browser: BrowserChoice): string {
+  return browser === "chrome" ? LEGAL_RESEARCH_CHROME_PROFILE_DIR : join(getAgentDir(), "legal-research-edge-profile");
+}
 
 /** Override the browser executable. Provider-specific legacy names remain accepted. */
 export const CHROME_PATH_ENV = "LEGAL_RESEARCH_CHROME_PATH";
+export const EDGE_PATH_ENV = "LEGAL_RESEARCH_EDGE_PATH";
 const LEGACY_CHROME_PATH_ENV = ["SCHOLAR_CHROME_PATH", "COURTLISTENER_CHROME_PATH"];
 /** Set to off/0/false/no to silence the CAPTCHA and verification alert sound. */
 export const ALERT_SOUND_ENV = "LEGAL_RESEARCH_ALERT_SOUND";
@@ -160,7 +158,7 @@ export const TIMING_PROFILES: Readonly<Record<TimingMode, TimingProfile>> = {
 };
 
 // ---------------------------------------------------------------------------
-// Chrome lifecycle: find the installed browser, keep one debuggable instance
+// Browser lifecycle: one debuggable instance per selected browser/profile
 // ---------------------------------------------------------------------------
 
 function configuredEnv(primary: string, legacy: readonly string[]): string | undefined {
@@ -171,30 +169,36 @@ function configuredEnv(primary: string, legacy: readonly string[]): string | und
   return undefined;
 }
 
-export function findChrome(): string {
+export function findChrome(browser: BrowserChoice = "chrome"): string {
   const pf = process.env.ProgramFiles ?? "C:\\Program Files";
   const pf86 = process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
   const local = process.env.LOCALAPPDATA ?? "";
-  const candidates = [
+  const candidates = (browser === "edge" ? [
+    configuredEnv(EDGE_PATH_ENV, []),
+    join(pf, "Microsoft\\Edge\\Application\\msedge.exe"),
+    join(pf86, "Microsoft\\Edge\\Application\\msedge.exe"),
+    local && join(local, "Microsoft\\Edge\\Application\\msedge.exe"),
+    "/usr/bin/microsoft-edge",
+    "/opt/microsoft/msedge/msedge",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+  ] : [
     configuredEnv(CHROME_PATH_ENV, LEGACY_CHROME_PATH_ENV),
     join(pf, "Google\\Chrome\\Application\\chrome.exe"),
     join(pf86, "Google\\Chrome\\Application\\chrome.exe"),
     local && join(local, "Google\\Chrome\\Application\\chrome.exe"),
-    join(pf, "Microsoft\\Edge\\Application\\msedge.exe"),
-    join(pf86, "Microsoft\\Edge\\Application\\msedge.exe"),
     "/usr/bin/google-chrome",
     "/opt/google/chrome/chrome",
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  ].filter(Boolean) as string[];
+  ]).filter(Boolean) as string[];
   for (const candidate of candidates) if (existsSync(candidate)) return candidate;
-  throw new Error(`Chrome not found. Install Google Chrome or set ${CHROME_PATH_ENV} to the browser executable.`);
+  throw new Error(`${browser === "edge" ? "Microsoft Edge" : "Google Chrome"} not found. Install it or set ${browser === "edge" ? EDGE_PATH_ENV : CHROME_PATH_ENV} to its executable.`);
 }
 
 export type CdpEndpoint = { httpUrl: string; webSocketUrl: string };
 
-function profileCdpCandidate(): { httpUrl: string; expectedWebSocketPath: string } | undefined {
+function profileCdpCandidate(browser: BrowserChoice): { httpUrl: string; expectedWebSocketPath: string } | undefined {
   try {
-    const [portLine, pathLine] = readFileSync(DEVTOOLS_ACTIVE_PORT_FILE, "utf8").trim().split(/\r?\n/);
+    const [portLine, pathLine] = readFileSync(join(browserProfileDirectory(browser), "DevToolsActivePort"), "utf8").trim().split(/\r?\n/);
     const port = Number(portLine);
     if (!Number.isInteger(port) || port < 1 || port > 65535 || !pathLine?.startsWith("/devtools/browser/")) {
       return undefined;
@@ -232,35 +236,35 @@ async function probeCdpEndpoint(
   }
 }
 
-async function profileCdpEndpoint(signal?: AbortSignal): Promise<CdpEndpoint | undefined> {
-  const candidate = profileCdpCandidate();
+async function profileCdpEndpoint(browser: BrowserChoice, signal?: AbortSignal): Promise<CdpEndpoint | undefined> {
+  const candidate = profileCdpCandidate(browser);
   if (!candidate) return undefined;
   return probeCdpEndpoint(candidate.httpUrl, candidate.expectedWebSocketPath, signal);
 }
 
-let chromeLaunch: Promise<CdpEndpoint> | undefined;
+const browserLaunches = new Map<BrowserChoice, Promise<CdpEndpoint>>();
 
-/** Connect to the shared profile's Chrome, launching it at `launchUrl` if needed. */
-export async function ensureChrome(launchUrl: string, signal?: AbortSignal): Promise<CdpEndpoint> {
+/** Connect to the selected browser's dedicated profile, launching it if needed. */
+export async function ensureChrome(launchUrl: string, signal?: AbortSignal, browser: BrowserChoice = currentBrowser()): Promise<CdpEndpoint> {
   throwIfAborted(signal);
-  const existing = await profileCdpEndpoint(signal);
+  const existing = await profileCdpEndpoint(browser, signal);
   if (existing) return existing;
-  // Both providers share one Chrome; a concurrent launch must reuse the same attempt.
-  if (!chromeLaunch) {
-    chromeLaunch = launchChrome(launchUrl, signal).finally(() => {
-      chromeLaunch = undefined;
-    });
+  // Providers share a profile only within the same browser choice.
+  if (!browserLaunches.has(browser)) {
+    browserLaunches.set(browser, launchChrome(launchUrl, browser, signal).finally(() => {
+      browserLaunches.delete(browser);
+    }));
   }
-  return chromeLaunch;
+  return browserLaunches.get(browser)!;
 }
 
-async function launchChrome(launchUrl: string, signal?: AbortSignal): Promise<CdpEndpoint> {
+async function launchChrome(launchUrl: string, browser: BrowserChoice, signal?: AbortSignal): Promise<CdpEndpoint> {
   let launchError: Error | undefined;
   const child = spawn(
-    findChrome(),
+    findChrome(browser),
     [
       "--remote-debugging-port=0",
-      `--user-data-dir=${LEGAL_RESEARCH_CHROME_PROFILE_DIR}`,
+      `--user-data-dir=${browserProfileDirectory(browser)}`,
       "--no-first-run",
       "--no-default-browser-check",
       "--window-size=1280,950",
@@ -275,13 +279,13 @@ async function launchChrome(launchUrl: string, signal?: AbortSignal): Promise<Cd
   const deadline = Date.now() + CHROME_LAUNCH_WAIT_MS;
   while (Date.now() < deadline) {
     await abortableDelay(300, signal);
-    if (launchError) throw new Error(`Could not start Chrome: ${launchError.message}`);
-    const endpoint = await profileCdpEndpoint(signal);
+    if (launchError) throw new Error(`Could not start ${browser}: ${launchError.message}`);
+    const endpoint = await profileCdpEndpoint(browser, signal);
     if (endpoint) return endpoint;
   }
   throw new TransientBrowserError(
-    "Chrome started but its profile-specific debugging endpoint never came up. " +
-      "Close any Chrome window using the legal-research profile and retry.",
+    `${browser} started but its profile-specific debugging endpoint never came up. ` +
+      `Close the ${browser} window using ${browserProfileDirectory(browser)} and retry.`,
   );
 }
 
@@ -385,7 +389,7 @@ export class Cdp {
         settled = true;
         cleanup();
         try { ws.close(); } catch {}
-        reject(new TransientBrowserError("Timed out connecting to Chrome's debugging endpoint"));
+        reject(new TransientBrowserError("Timed out connecting to the browser's debugging endpoint"));
       }, CDP_CONNECT_TIMEOUT_MS);
       ws.addEventListener("open", () => {
         if (settled) return;
@@ -397,7 +401,7 @@ export class Cdp {
         if (settled) return;
         settled = true;
         cleanup();
-        reject(new TransientBrowserError("Could not connect to Chrome's debugging endpoint"));
+        reject(new TransientBrowserError("Could not connect to the browser's debugging endpoint"));
       }, { once: true });
       signal?.addEventListener("abort", onAbort, { once: true });
       if (signal?.aborted) onAbort();
@@ -423,7 +427,7 @@ export class Cdp {
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) {
           cleanup();
-          reject(new CdpCommandTimeoutError(`CDP ${method} timed out after ${timeoutMs}ms; is the Chrome window responsive?`));
+          reject(new CdpCommandTimeoutError(`CDP ${method} timed out after ${timeoutMs}ms; is the browser window responsive?`));
         }
       }, timeoutMs);
       this.pending.set(id, {
@@ -496,11 +500,25 @@ export interface ChallengeMessages {
  */
 export class ProviderBrowser {
   readonly config: ProviderBrowserConfig;
-  timingMode: TimingMode = "fast";
-  private lastRequestAt: number | undefined;
-  private queue: Promise<unknown> = Promise.resolve();
-  private readonly tabLeases = new Map<string, number>();
-  private readonly navigationSessions = new Map<string, NavigationSession>();
+  private readonly states = new Map<BrowserChoice, {
+    timingMode: TimingMode; lastRequestAt?: number; queue: Promise<unknown>;
+    tabLeases: Map<string, number>; navigationSessions: Map<string, NavigationSession>;
+  }>();
+  private get state() {
+    const choice = currentBrowser();
+    if (!this.states.has(choice)) this.states.set(choice, {
+      timingMode: "fast", queue: Promise.resolve(), tabLeases: new Map(), navigationSessions: new Map(),
+    });
+    return this.states.get(choice)!;
+  }
+  get timingMode(): TimingMode { return this.state.timingMode; }
+  set timingMode(value: TimingMode) { this.state.timingMode = value; }
+  private get lastRequestAt() { return this.state.lastRequestAt; }
+  private set lastRequestAt(value: number | undefined) { this.state.lastRequestAt = value; }
+  private get queue() { return this.state.queue; }
+  private set queue(value: Promise<unknown>) { this.state.queue = value; }
+  private get tabLeases() { return this.state.tabLeases; }
+  private get navigationSessions() { return this.state.navigationSessions; }
   private readonly tabClosedListeners: Array<(targetId: string) => void> = [];
 
   constructor(config: ProviderBrowserConfig) {
@@ -571,7 +589,7 @@ export class ProviderBrowser {
     try {
       onUpdate?.({
         content: [{ type: "text", text: message }],
-        details: { timingMode: this.timingMode, ...details, status, message },
+        details: { browser: currentBrowser(), timingMode: this.timingMode, ...details, status, message },
       });
     } catch {
       // Progress reporting is best-effort and must not fail the underlying tool.

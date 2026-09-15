@@ -205,6 +205,25 @@ test("a large Markdown opinion uses overlapping multipart summaries before audit
     assert.equal(output.details.multipart?.partTokenLimit, 120_000);
     assert.equal(output.details.multipart?.overlapTokens, 2_000);
     assert.equal(invocations.length, output.details.multipart!.partCount + 2);
+    const parts = splitSourceIntoOverlappingParts(loaded);
+    const partContexts = invocations.slice(0, parts.length).map(call => JSON.parse(call.prompt.match(/^PART_CONTEXT_JSON=(.+)$/m)![1]));
+    for (const [index, context] of partContexts.entries()) {
+      assert.equal(context.source_scope, "partial_opinion");
+      assert.equal(context.part_number, index + 1);
+      assert.equal(context.total_parts, parts.length);
+      assert.equal(context.first_block, parts[index].blocks[0].id);
+      assert.equal(context.last_block, parts[index].blocks.at(-1)!.id);
+      assert.equal(context.has_previous_part, index > 0);
+      assert.equal(context.has_next_part, index + 1 < parts.length);
+      const neighbors = new Set([...(parts[index - 1]?.blocks ?? []), ...(parts[index + 1]?.blocks ?? [])].map(block => block.id));
+      assert.deepEqual(context.overlap_block_ids, parts[index].blocks.filter(block => neighbors.has(block.id)).map(block => block.id));
+      assert.ok(context.overlap_block_ids.length > 0);
+    }
+    for (const invocation of invocations.slice(-2)) {
+      const partials = JSON.parse(invocation.prompt.match(/^PARTIAL_SUMMARIES_JSON=(.+)$/m)![1]);
+      assert.deepEqual(partials.map(({ summary: _summary, ...context }: any) => context), partContexts);
+      assert.ok(partials.every((partial: any) => partial.summary.executive_summary.length > 0));
+    }
   } finally {
     assert.equal(dirname(root).toLowerCase(), parent.toLowerCase());
     rmSync(root, { recursive: true, force: true });

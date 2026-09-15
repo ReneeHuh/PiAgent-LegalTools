@@ -1,4 +1,5 @@
 import type { AgentToolResult, AgentToolUpdateCallback } from "@earendil-works/pi-coding-agent";
+import { currentBrowser } from "./browser-choice.ts";
 import {
   ensureDirectory,
   providerIdFromUrl,
@@ -546,8 +547,8 @@ export async function openProviderBrowser(
       ? await openCourtListenerBrowser(url, signal, onUpdate)
       : await openJustiaBrowser(url, signal, onUpdate);
   return {
-    content: [{ type: "text", text: `Chrome window is open at ${opened.url}. It stays open for the user between tool calls.` }],
-    details: { url: opened.url, timingMode: opened.timingMode },
+    content: [{ type: "text", text: `${currentBrowser() === "edge" ? "Microsoft Edge" : "Google Chrome"} window is open at ${opened.url}. It stays open for the user between tool calls.` }],
+    details: { browser: currentBrowser(), url: opened.url, timingMode: opened.timingMode },
   };
 }
 

@@ -1,4 +1,6 @@
 import { processDownloadedOpinion } from "./opinion-processing.ts";
+import { currentBrowser, validateBrowser, withBrowser, type BrowserChoice } from "./browser-choice.ts";
+import { runSelectedDownloads, type SelectedDownloadOptions, type SelectedDownloadResult } from "./selected-downloads.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -21,24 +23,30 @@ import { downloadClickedResultLink, runUnifiedSearch, type DownloadedCase } from
 import { readSearchRun, recordSearchDownload } from "./search-history.ts";
 
 export interface DirectDownloadFindOptions {
+  browser?: BrowserChoice;
   action: "find";
   case_name: string;
   jurisdiction: string;
 }
 
 export interface DirectDownloadSaveOptions {
+  browser?: BrowserChoice;
   summarize?: boolean;
   action: "download";
   selection_handle: string;
   candidate_key: string;
 }
 
-export type DirectDownloadOptions = DirectDownloadFindOptions | DirectDownloadSaveOptions;
+export type DirectDownloadOptions = DirectDownloadFindOptions | DirectDownloadSaveOptions | SelectedDownloadOptions;
 
 export interface DirectDownloadOutcome {
+  browser?: BrowserChoice;
+  runId?: string;
+  results?: SelectedDownloadResult[];
+  retry?: SelectedDownloadOptions | null;
   researchRuns?: SearchRunResult["researchRuns"];
   warnings?: string[];
-  status: "results" | "completed" | "download_failed" | "partial_failure";
+  status: "results" | "completed" | "download_failed" | "partial_failure" | "stopped";
   html?: string;
   candidates?: NormalizedCase[];
   providers?: SearchRunResult["providers"];
@@ -66,6 +74,7 @@ interface DirectSelectionCandidate {
 }
 
 interface DirectSelection {
+  browser?: BrowserChoice;
   researchRuns?: SearchRunResult["researchRuns"];
   schemaVersion: 1;
   selectionHandle: string;
@@ -241,6 +250,7 @@ async function searchForLinks(
   const selectionHandle = allocated.handle;
   const selectedCandidates = selectionCandidates(search.cases);
   const selection: DirectSelection = {
+    browser: currentBrowser(),
     researchRuns: search.researchRuns,
     schemaVersion: 1,
     selectionHandle,
@@ -252,6 +262,7 @@ async function searchForLinks(
   writeJsonAtomic(allocated.path, selection);
   return {
     status: "results",
+    browser: currentBrowser(),
     researchRuns: search.researchRuns,
     html: renderDirectResultsHtml(caseName, jurisdiction.canonical, search.cases, selectionHandle).replace("</body>",
       `<p>Saved research runs: ${(search.researchRuns ?? []).map(run => htmlEscape(run.runId)).join(", ")}</p></body>`),
@@ -296,6 +307,11 @@ async function downloadLink(
   if (provider !== candidate.source.provider || directCandidateKey(candidate.source) !== candidateKey) {
     throw new Error("The saved direct-download candidate identity is invalid.");
   }
+  const browser = validateBrowser(selection.browser);
+  if (options.browser !== undefined && validateBrowser(options.browser) !== browser) {
+    throw new Error(`This find selection belongs to ${browser}. Omit browser to use it, or run find again in ${options.browser}.`);
+  }
+  return withBrowser(browser, async () => {
   selection.claimedAt = nowIso();
   writeJsonAtomic(path, selection);
   const downloadRoot = ensureDirectory(join(ctx.cwd, "Cases"));
@@ -322,6 +338,7 @@ async function downloadLink(
   if (downloaded.status === "downloaded") selection.usedAt = nowIso();
   writeJsonAtomic(path, selection);
   return {
+    browser,
     status: downloaded.status !== "downloaded" ? "download_failed"
       : downloaded.saved?.markdownError || (options.summarize && downloaded.saved?.summary?.status === "failed") ? "partial_failure" : "completed",
     link,
@@ -332,6 +349,7 @@ async function downloadLink(
     warnings,
     case_key: downloaded.status === "downloaded" ? downloaded.case.canonicalKey : undefined,
   };
+  });
 }
 
 export async function runDirectDownload(
@@ -341,19 +359,22 @@ export async function runDirectDownload(
   ctx: ExtensionContext,
   download: typeof downloadClickedResultLink = downloadClickedResultLink,
 ): Promise<DirectDownloadOutcome> {
+  validateBrowser(options.browser);
+  if (options.action === "download_results") return runSelectedDownloads(options, signal, onUpdate, ctx);
   if (options.action === "find") {
-    rejectUnexpectedOptions(options, ["action", "case_name", "jurisdiction"], "find");
-    return searchForLinks(options, signal, onUpdate, ctx);
+    rejectUnexpectedOptions(options, ["action", "case_name", "jurisdiction", "browser"], "find");
+    return withBrowser(validateBrowser(options.browser), () => searchForLinks(options, signal, onUpdate, ctx));
   }
   if (options.action === "download") {
-    rejectUnexpectedOptions(options, ["action", "selection_handle", "candidate_key", "summarize"], "download");
+    rejectUnexpectedOptions(options, ["action", "selection_handle", "candidate_key", "summarize", "browser"], "download");
     if (options.summarize !== undefined && typeof options.summarize !== "boolean") throw new Error("summarize must be a boolean.");
     return downloadLink(options, signal, onUpdate, ctx, download);
   }
-  throw new Error('action must be "find" or "download".');
+  throw new Error('action must be "find", "download", or "download_results".');
 }
 
 export function directDownloadOutcomeText(outcome: DirectDownloadOutcome): string {
+  if (outcome.results) return JSON.stringify(outcome, null, 2);
   if (outcome.status === "results") return outcome.html ?? "<!doctype html><html><body><p>No results found.</p></body></html>";
   const warnings = (outcome.warnings ?? []).map(warning => `\nWarning: ${warning}`).join("");
   if (outcome.status === "completed" || outcome.status === "partial_failure") {

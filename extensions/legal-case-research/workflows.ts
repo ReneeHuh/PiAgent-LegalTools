@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { currentBrowser } from "./browser-choice.ts";
 import { readFileSync } from "node:fs";
 import { checkOpinionIntegrity, findSavedOpinion } from "./library.ts";
 import { checkpointSearch, recordSearchPage, startSearchRun } from "./search-history.ts";
@@ -120,7 +121,7 @@ export async function runUnifiedSearch(
   const researchRuns: NonNullable<SearchRunResult["researchRuns"]> = [];
   for (const { provider, params } of requests) {
     const run = ctx ? startSearchRun(ctx.cwd, { searchTerm: query, provider, jurisdiction: uniformJurisdiction(options.court ?? "all"),
-      pagesToSearch: 1, startPage: 1, endPage: 1, maxCasesToDownload: 0, yearFrom: options.year_from, yearTo: options.year_to }) : undefined;
+      browser: currentBrowser(), pagesToSearch: 1, startPage: 1, endPage: 1, maxCasesToDownload: 0, yearFrom: options.year_from, yearTo: options.year_to }) : undefined;
     if (run) researchRuns.push({ runId: run.manifest.runId, provider, manifestPath: run.manifestPath });
     emit(onUpdate, `Resolving the exact case on ${provider}.`, { phase: "resolving", provider });
     try {

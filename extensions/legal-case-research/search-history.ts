@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync, readdirSync, realpathSync, truncateSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
 import { ensureDirectory, nowIso, requestFingerprint, slugify, writeJsonAtomic, type JustiaRawResult, type NormalizedCase, type ProviderRawResult } from "./core.ts";
@@ -85,6 +85,34 @@ export function latestSearchPages(run: SearchRun): SearchPage[] {
   const pages = new Map<number, SearchPage>();
   for (const event of run.events) if (event.type === "page") pages.set(event.page, event);
   return [...pages.values()].sort((a, b) => a.page - b.page);
+}
+
+export interface SearchObservation {
+  result_ref: string;
+  page: number;
+  position: number;
+  retrieved_at: string;
+  raw: ProviderRawResult;
+  case: NormalizedCase;
+}
+
+/** An observation stays addressable after pagination, recapture, and restart.
+ * Journal index disambiguates even identical rows retrieved in the same millisecond.
+ * Including the saved record binds the reference to its provider-native identity.
+ */
+export function searchObservations(run: SearchRun, latestOnly = true): SearchObservation[] {
+  const latest = new Set(latestSearchPages(run));
+  return run.events.flatMap((event, eventIndex) => event.type !== "page" || (latestOnly && !latest.has(event)) ? []
+    : event.records.map((record, recordIndex) => ({
+      result_ref: "r_" + createHash("sha256").update(JSON.stringify([run.manifest.runId, eventIndex, recordIndex, event])).digest("hex").slice(0, 32),
+      page: event.page, position: record.position, retrieved_at: event.retrievedAt, raw: record.raw, case: record.case,
+    }))).sort((a, b) => a.page - b.page || a.position - b.position);
+}
+
+export function compactSearchResult(item: NormalizedCase, provider: NormalizedCase["sources"][number]["provider"], resultRef: string) {
+  return { result_ref: resultRef, title: item.title, court: item.court ?? null, year: item.year ?? null,
+    publication_status: item.publicationStatus ?? null, case_key: item.canonicalKey, provider,
+    result_snippet: item.snippet ?? null };
 }
 export function startSearchRun(cwd: string, request: ValidatedLegalSearchRequest, runId?: string, refreshOf?: string): SearchRun {
   const { endPage: _endPage, ...savedRequest } = request;

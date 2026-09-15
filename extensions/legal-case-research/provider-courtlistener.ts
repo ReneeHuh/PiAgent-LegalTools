@@ -1,5 +1,5 @@
 // CourtListener case-law provider: rendered search pages, result-title clicks,
-// and opinion capture in the shared visible Chrome window.
+// and opinion capture in the shared visible browser window.
 //
 // Every operation is single-page. Page 1 is reached through CourtListener's
 // own search form (or the constructed cites URL for cited-by lookups); later
@@ -9,6 +9,7 @@
 // to the same tab and checking whether the navigation already completed.
 import type { AgentToolUpdateCallback } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
+import { currentBrowser } from "./browser-choice.ts";
 import {
   PAGE_WAIT_MS,
   ProviderBrowser,
@@ -50,19 +51,24 @@ const browser = new ProviderBrowser({
 
 // The tab that most recently rendered each cluster's result link, so a click
 // can go straight to it. Bounded and pruned when agent tabs are closed.
-const clusterTabs = new Map<string, TabRef>();
+const clusterTabsByBrowser = new Map<string, Map<string, TabRef>>();
+function clusterTabs(): Map<string, TabRef> {
+  const choice = currentBrowser();
+  if (!clusterTabsByBrowser.has(choice)) clusterTabsByBrowser.set(choice, new Map());
+  return clusterTabsByBrowser.get(choice)!;
+}
 browser.onTabClosed((targetId) => {
-  for (const [clusterId, tab] of clusterTabs) {
-    if (tab.targetId === targetId) clusterTabs.delete(clusterId);
+  for (const [clusterId, tab] of clusterTabs()) {
+    if (tab.targetId === targetId) clusterTabs().delete(clusterId);
   }
 });
 function rememberClusterTab(clusterId: string, tab: TabRef): void {
-  clusterTabs.delete(clusterId);
-  clusterTabs.set(clusterId, tab);
-  while (clusterTabs.size > MAX_REMEMBERED_CLUSTER_TABS) {
-    const oldest = clusterTabs.keys().next().value as string | undefined;
+  clusterTabs().delete(clusterId);
+  clusterTabs().set(clusterId, tab);
+  while (clusterTabs().size > MAX_REMEMBERED_CLUSTER_TABS) {
+    const oldest = clusterTabs().keys().next().value as string | undefined;
     if (!oldest) break;
-    clusterTabs.delete(oldest);
+    clusterTabs().delete(oldest);
   }
 }
 
@@ -121,7 +127,7 @@ const PAGE_PROBE = `(() => {
 const VERIFICATION_MESSAGES = {
   detected: "CourtListener verification detected; waiting up to 120 seconds for the user. Browser steps switch to a cautious randomized 1.5–3.0 seconds after it clears.",
   detectedAgain: "CourtListener verification detected again; waiting up to 120 seconds for the user. Browser steps remain at a cautious randomized 1.5–3.0 seconds after it clears.",
-  unsolved: "CourtListener is showing a verification page in the open Chrome window. Complete it there, then retry the tool.",
+  unsolved: "CourtListener is showing a verification page in the open browser window. Complete it there, then retry the tool.",
   cleared: "CourtListener verification cleared; continuing with cautious 1.5–3.0 second browser steps.",
 };
 
@@ -266,7 +272,7 @@ async function capturePage(
   };
 
   let state = await waitMatched();
-  if (!state) throw new TransientBrowserError("CourtListener page never loaded; is Chrome responsive?");
+  if (!state) throw new TransientBrowserError("CourtListener page never loaded; is the browser responsive?");
   try { await browser.markAgentTab(cdp, sessionId, tab.marker); } catch {}
   const encounteredVerification = state.verification;
   state = await handleVerification(cdp, targetId, sessionId, state, signal, onStatus);
@@ -467,7 +473,7 @@ export function browserClickNextResultsPage(tab: TabRef, signal?: AbortSignal, o
 function leaseResultTab(clusterId: string, signal?: AbortSignal, onStatus?: StatusCallback): Promise<TabRef> {
   return browser.withLock(async () => {
     return browser.withRecovery("Finding the rendered CourtListener result link", async (cdp, attempt) => {
-      const remembered = clusterTabs.get(clusterId);
+      const remembered = clusterTabs().get(clusterId);
       const rememberedIdle = remembered && !browser.isLeased(remembered.targetId) ? remembered : undefined;
       const discovered = rememberedIdle ? [] : await browser.discoverAgentTabs(cdp, signal);
       const tabs = [
@@ -983,7 +989,7 @@ export async function clickCourtListenerResult(
   }
 }
 
-/** Open or focus the shared visible Chrome window at a CourtListener URL (default: home). */
+/** Open or focus the shared visible browser window at a CourtListener URL (default: home). */
 export async function openCourtListenerBrowser(
   url: string | undefined,
   signal?: AbortSignal,

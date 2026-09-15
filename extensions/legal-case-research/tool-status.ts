@@ -1,7 +1,7 @@
 import type { AgentToolUpdateCallback } from "@earendil-works/pi-coding-agent";
 import { isAbortError } from "./browser.ts";
 
-export type ToolLifecycleStatus = "running" | "completed" | "failed" | "cancelled";
+export type ToolLifecycleStatus = "running" | "completed" | "stopped" | "partial_failure" | "failed" | "cancelled";
 
 interface ToolResultLike {
   details?: unknown;
@@ -101,14 +101,20 @@ export async function runWithToolStatus<T extends ToolResultLike>(
       );
       return output;
     }
+    const paused = outcomeStatus === "stopped" || outcomeStatus === "paused";
+    const partial = outcomeStatus === "partial_failure" || outcomeStatus === "download_failed";
+    const terminalStatus: ToolLifecycleStatus = paused ? "stopped" : partial ? "partial_failure" : "completed";
+    const details = output.details && typeof output.details === "object" ? output.details as Record<string, unknown> : {};
+    const recovery = paused ? " Saved progress is preserved; use the returned resume fields or retry selection."
+      : partial ? " Successful sources are preserved; inspect the per-result errors and retry only pending work." : "";
     emitToolStatus(
       onUpdate,
       tool,
       toolCallId,
-      `Finished ${tool}.${suffix}`,
-      "completed",
-      "completed",
-      outcomeStatus ? { resultStatus: outcomeStatus } : {},
+      `${paused ? "Paused" : partial ? "Partially finished" : "Finished"} ${tool}.${suffix}${recovery}`,
+      terminalStatus,
+      terminalStatus,
+      { resultStatus: outcomeStatus, runId: details.runId, resumePage: details.resumePage, pagesRemaining: details.pagesRemaining, retry: details.retry },
     );
     return output;
   } catch (error) {

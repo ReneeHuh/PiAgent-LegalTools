@@ -50,9 +50,19 @@ Start with explicit query, provider, and court scope:
 {"search_term":"reasonable care","provider":"scholar","jurisdiction":"michigan","pages_to_search":2,"max_cases_to_download":0}
 ```
 
-The response includes `runId`, `manifestPath`, `reviewPath`, `lastRetrievedAt`, all observed results, download totals, and warnings. Each result exposes `publication_status` and a top-level `result_snippet` containing the provider's search excerpt, or `null` when unavailable. `passage_source` identifies the excerpt as `provider_snippet` or `unavailable`. The response also includes retrieval time and saved source hashes. An unavailable publication label is `null`; it is never inferred from a reporter citation. Snippets are discovery excerpts, not verified quotations.
+The response includes `runId`, scope, retrieval time, download totals, warnings, and up to 20 compact rows. Rows contain `result_ref`, `title`, `court`, `year`, `publication_status`, `case_key`, `provider`, and `result_snippet`; unknown metadata is null. `result_snippet` is a provider discovery excerpt, not a verified quotation. `nextOffset` identifies more saved rows; pass it as `offset` to `legal_search_history action=read` with the same `run_id`. All observed records remain in full tool details and saved history.
 
-Each result has normalized fields at its root, a singular `provider`, and a `provider_data` object containing provider-native identifiers and metadata plus `opinion_url`, `result_page`, `result_position`, and `retrieved_at`. One call searches one provider. For supplemental Justia discovery, use `provider: "justia"`, `jurisdiction: "all"`, and omit year filters.
+Inspect a row with `legal_search_history action=read`, `run_id`, and its `result_ref` for native metadata, original page/position, URL, source paths, and integrity. References stay valid when later retrieval changes rankings; a case key alone identifies the case, not a specific observed row. Full search details retain `provider_data`, `passage_source`, and source hashes. One call searches one provider. For supplemental Justia discovery, use `provider: "justia"`, `jurisdiction: "all"`, and omit year filters.
+
+All browser tools accept `browser: "chrome" | "edge"`. The LLM chooses, defaulting to Chrome. Omit it on resume or saved selections to retain the recorded choice. Chrome and Edge use separate persistent profiles and tab/session state. An explicit browser change on a search run uses the new browser and persists that choice.
+
+To download selected rows, call `direct_download`:
+
+```json
+{"action":"download_results","run_id":"<returned-run-id>","result_refs":["<returned-result-ref>","<another-returned-result-ref>"],"summarize":true}
+```
+
+The tool supports all three providers, restores saved query pages, verifies native identities, and reports each selected outcome separately. Successful captures are saved before conversion or summary. Returned `retry` arguments cover unfinished work and reuse verified captures. If the selected opinion has disappeared from the saved page, inspect its original record and use a new exact-case search; the tool does not download a different row in its place.
 
 To continue the same record, copy its `runId` into `run_id` and retain the same query/provider/court/date filters:
 

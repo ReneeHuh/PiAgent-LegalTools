@@ -17,6 +17,8 @@ Call `legal_jurisdictions` before the first provider search and reuse its canoni
 
 Briefly explain starting concepts, queries, provider, and limits. Default to Scholar if no provider is chosen. Combine factual wording with plausible legal concepts; distinguish synonyms from different theories. Learn terminology from reliable sources; unverified doctrine names remain hypotheses. Include alternative or contrary formulations when useful.
 
+Choose `browser: "chrome"` or `"edge"` from user preference and available installation; default to Chrome. Make this choice without another user question. Omit it on resume or saved-result downloads to retain the run's browser. Each browser has its own persistent profile and tabs.
+
 Use complementary queries, not one overloaded string. Read [search-terms.md](references/search-terms.md) for unfamiliar issues or refinement examples, and [provider-search.md](references/provider-search.md) before advanced operators. Do not require a separate plan document.
 
 ## Choose scope
@@ -40,9 +42,11 @@ Use results to identify vocabulary, irrelevant matches, and gaps. Refine routine
 
 - `legal_library_search`: reuse only integrity-valid opinions; preserve originals.
 - `legal_search`: topic searches, listings, and optional automatic downloads.
-- `direct_download`: find an exact case, then download with returned selection identifiers; never substitute a raw URL.
+- `direct_download`: use `download_results` with a saved search's `run_id` and selected `result_refs`; for a named case without saved results, use `find` then `download`. Never substitute a raw URL.
 - `legal_cited_by`: citing decisions from an integrity-checked saved seed; no automatic recursion or treatment labels.
-- `legal_search_history`: inspect runs and record actual review notes.
+- `legal_search_history`: page through saved listings, inspect an exact `result_ref`, and record actual review notes.
+
+The search preview shows up to 20 compact rows; `nextOffset` points to more saved rows. Use history pagination to cover the requested results. Map a user's displayed row choices to their returned `result_ref` values before downloading; page numbers and row positions can change on later retrievals. Missing provider metadata stays unknown. Read the exact saved opinion before treating a snippet as authority.
 
 Read [tool-calls.md](references/tool-calls.md) before exact-case/cited-by work, resume/refresh, or detailed file handling. Acquisitions save HTML and opinion Markdown; optional `summarize: true` directly saves `.Summary.md` sequentially. Search and summarization report progress.
 

@@ -1,5 +1,5 @@
 // Google Scholar case-law provider: rendered search pages, result-title clicks,
-// and opinion capture in the shared visible Chrome window.
+// and opinion capture in the shared visible browser window.
 //
 // Every operation is single-page. Page 1 is reached through Scholar's own
 // search form (or the constructed cites URL for cited-by lookups); later pages
@@ -210,7 +210,7 @@ const PROBE = `(() => {
 const CAPTCHA_MESSAGES = {
   detected: "CAPTCHA detected; waiting up to 120 seconds for the user to solve it. Browser steps switch to a cautious randomized 1.5–3.0 seconds after it clears.",
   detectedAgain: "CAPTCHA detected again; waiting up to 120 seconds for the user to solve it. Browser steps remain at a cautious randomized 1.5–3.0 seconds after it clears.",
-  unsolved: "Google Scholar is showing a CAPTCHA in the open Chrome window. Ask the user to solve it there, then retry this tool.",
+  unsolved: "Google Scholar is showing a CAPTCHA in the open browser window. Ask the user to solve it there, then retry this tool.",
   cleared: "CAPTCHA cleared; continuing the Scholar request with cautious 1.5–3.0 second browser steps.",
 };
 
@@ -270,7 +270,7 @@ async function capturePage(
   };
 
   let state = await waitMatched();
-  if (!state) throw new TransientBrowserError("Page never loaded; is the Chrome window responsive?");
+  if (!state) throw new TransientBrowserError("Page never loaded; is the browser window responsive?");
   try { await browser.markAgentTab(cdp, sessionId, tab.marker); } catch {}
   throwIfAborted(signal);
 
@@ -284,12 +284,12 @@ async function capturePage(
   if (state.traffic) {
     throw new TransientBrowserError(
       "Google Scholar blocked this request (unusual-traffic page, no CAPTCHA offered). " +
-        "Wait a few minutes and keep query volume low; the Chrome window stays open.",
+        "Wait a few minutes and keep query volume low; the browser window stays open.",
     );
   }
   if (state.alert && !state.noResults && !state.results && !state.opinion) {
     throw new Error(
-      "Google Scholar returned an alert page instead of the requested content. Inspect the open Chrome tab and retry.",
+      "Google Scholar returned an alert page instead of the requested content. Inspect the open browser tab and retry.",
     );
   }
   if (!matchesExpectedPage(state, expected, previousHref)) {
@@ -301,7 +301,7 @@ async function capturePage(
   if (!state.results && !state.opinion && !state.alert) {
     throw new Error(
       `Google Scholar returned an unrecognized page (url: ${state.href}, title: "${state.title}", ` +
-        `readyState: ${state.ready}). Look at the open Chrome window to see what it is.`,
+        `readyState: ${state.ready}). Look at the open browser window to see what it is.`,
     );
   }
 
@@ -427,7 +427,7 @@ function browserFetch(
       browser.acquireTabLease(tab);
       return page;
     } finally {
-      cdp.close(); // disconnect only; the user's Chrome window stays open
+      cdp.close(); // disconnect only; the user's browser window stays open
     }
   }, signal);
 }
@@ -902,7 +902,7 @@ export async function clickScholarResult(
   }
 }
 
-/** Open or focus the shared visible Chrome window at a Scholar URL (default: home). */
+/** Open or focus the shared visible browser window at a Scholar URL (default: home). */
 export async function openScholarBrowser(
   url: string | undefined,
   signal?: AbortSignal,

@@ -14,7 +14,23 @@ Results-only example:
 {"search_term":"state-created danger doctrine","provider":"scholar","jurisdiction":"3rd circuit","pages_to_search":-1,"max_cases_to_download":0,"summarize":false}
 ```
 
-Pass the chosen limits explicitly: API defaults need not match the requested preset. Results retain provider page/position, metadata, URL, `case_key`, and `download_status`. Provider records may repeat the same decision; download selection uses unique cases accumulated across the run. For user-selected opinions, collect listings first, then use exact-case retrieval.
+Pass the chosen limits explicitly: API defaults need not match the requested preset. The model-facing preview includes up to 20 rows with `result_ref`, `title`, `court`, `year`, `publication_status`, `case_key`, `provider`, and `result_snippet`. Run metadata and download totals appear once. Missing values stay null. Provider records may repeat the same decision; automatic download selection uses unique cases accumulated across the run.
+
+Read more saved rows without another provider search:
+
+```json
+{"action":"read","run_id":"<returned-run-id>","offset":20,"limit":20}
+```
+
+Pass that to `legal_search_history`. For full native metadata, original page/position, URL, download paths, and integrity, use `action: "read"`, `run_id`, and an exact `result_ref`. `case_key` filters matching current observations. A result reference addresses its original observation even after the page is retrieved again.
+
+Download user-selected rows with `direct_download`:
+
+```json
+{"action":"download_results","run_id":"<returned-run-id>","result_refs":["<first-returned-ref>","<second-returned-ref>"],"summarize":false}
+```
+
+This accepts selections from Scholar, CourtListener, and Justia. It restores the saved query page and checks the provider's native opinion identity before clicking. Changed rankings can make a selection unavailable; report that result rather than substituting another case. Successful acquisitions are checkpointed before conversion or summary. Returned `retry` arguments contain unfinished work; verified saved sources are reused. Browser closures between search and selection can be recovered by restoring the saved page.
 
 For interrupted work, pass:
 
@@ -22,6 +38,7 @@ For interrupted work, pass:
 - `resume_page`: returned `resumePage`.
 - `pages_to_search`: returned `pagesRemaining`.
 - Unchanged query/provider/court/year filters and the original total download cap: five stays five after three successes; results-only stays zero with `summarize: false`.
+- Omit `browser` to retain the saved Chrome/Edge choice. An explicit change uses separate browser state and becomes the run's saved choice.
 
 Changed queries/filters require a new run. `refresh_of` starts a new dated retrieval linked to an earlier run; do not combine with `run_id`. Preserve remaining task-wide budgets across runs. Omitted runtime limit imposes no tool deadline.
 
@@ -37,7 +54,7 @@ Resolve candidate name/citation/court/date conflicts, then pass the actual retur
 {"action":"download","selection_handle":"<returned-handle>","candidate_key":"<returned-key>"}
 ```
 
-Keep the provider results tab open. Download accepts no URL. Successful acquisition consumes the handle, even if summarization later fails. Stale/used handles need another find; an unsuccessful acquisition can retry an unused handle while its tab remains valid. Retry a failed summary with `summarize_case` against the saved HTML.
+Keep the provider results tab open. Download accepts no URL. Successful acquisition consumes the find handle, even if summarization later fails. Stale/used handles need another find; an unsuccessful acquisition can retry an unused handle while its tab remains valid. Omit `browser` on download to use the find selection's browser; switching requires another find. Retry a failed summary with `summarize_case` against the saved opinion. These one-use handle rules apply to `find`/`download`; saved `result_refs` remain reusable.
 
 ## Citing cases
 
@@ -63,7 +80,7 @@ Acquisitions save HTML and opinion Markdown with YAML provenance/cited-by metada
 
 `summarize: true` on search, cited-by, or direct download calls the summarizer sequentially and saves `.Summary.md`. Fresh runs default false; resumes inherit the saved setting and reuse matching completed summaries.
 
-Ordinary results expose `saved_html_path`, `saved_md_path`, `conversion_error`, and `summary`. Direct/cited-by records use `saved.markdownPath`, `saved.markdownError`, and `saved.summary`. Conversion/summary failure can give `partial_failure` while acquisition remains `downloaded`; preserve and report both.
+Inspect an ordinary result through `legal_search_history` to obtain download/summary paths, derivative errors, and integrity. Full search details also retain `saved_html_path`, `saved_md_path`, `conversion_error`, and `summary`. Selected batch downloads return per-result paths and errors directly. Named-case direct/cited-by records use `saved.markdownPath`, `saved.markdownError`, and `saved.summary`. Conversion/summary failure can give `partial_failure` while acquisition remains `downloaded`; preserve and report both.
 
 `legal_search_history` supports `list`, `read` by `run_id`, and `review` with `run_id`, `case_key`, `review_status`, and `note`. Record only actual review. `lastRetrievedAt` is retrieval time; `updatedAt` may be bookkeeping.
 

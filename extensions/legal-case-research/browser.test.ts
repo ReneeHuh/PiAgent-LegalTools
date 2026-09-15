@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
+import { currentBrowser, validateBrowser, withBrowser } from "./browser-choice.ts";
 import {
   CdpCommandTimeoutError,
   ProviderBrowser,
@@ -20,6 +21,32 @@ function exampleBrowser(): ProviderBrowser {
     isProviderUrl: (url) => url.startsWith("https://example.com"),
   });
 }
+
+test("browser selection defaults to Chrome and isolates async work, navigation, leases, and timing", async () => {
+  const browser = exampleBrowser();
+  const tab = { targetId: "same-target-id", marker: "1-test" };
+  assert.equal(validateBrowser(undefined), "chrome");
+  assert.throws(() => validateBrowser("firefox"), /chrome.*edge/);
+  browser.rememberNavigationSession("run", { tab, page: 4 });
+  browser.acquireTabLease(tab);
+  browser.enableCautiousTiming();
+  await Promise.all([withBrowser("edge", async () => {
+    await Promise.resolve();
+    assert.equal(currentBrowser(), "edge");
+    assert.equal(browser.getNavigationSession("run"), undefined);
+    assert.equal(browser.isLeased(tab.targetId), false);
+    assert.equal(browser.timingMode, "fast");
+    browser.rememberNavigationSession("run", { tab: { ...tab, marker: "edge" }, page: 1 });
+  }), withBrowser("chrome", async () => {
+    await Promise.resolve();
+    assert.equal(currentBrowser(), "chrome");
+    assert.equal(browser.getNavigationSession("run")?.page, 4);
+    assert.equal(browser.isLeased(tab.targetId), true);
+    assert.equal(browser.timingMode, "slow");
+  })]);
+  assert.equal(currentBrowser(), "chrome");
+  assert.equal(browser.getNavigationSession("run")?.page, 4);
+});
 
 test("transient browser failures are recognized by type, not by message text", () => {
   assert.equal(isTransientBrowserFailure(new TransientBrowserError("CAPTCHA still showing")), true);

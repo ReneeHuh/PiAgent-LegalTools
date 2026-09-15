@@ -10,11 +10,11 @@ For dated history, refresh, integrity checks, and local library search, see [USA
 
 Successful acquisitions save original HTML and a same-name Markdown opinion with YAML metadata frontmatter. Metadata preserves case identity, provider URLs, cited-by identifiers, hashes, and derivative status; it is excluded from opinion evidence. Legacy fenced-JSON sidecars remain readable.
 
-Set `summarize: true` on `legal_search`, `legal_cited_by`, or the `download` action of `direct_download` to directly invoke the summarizer and save `<case>.Summary.md`. Calls are sequential per opinion, with progress forwarded to Pi. Summary/conversion failures preserve the HTML and are reported separately; resume reuses successful matching summaries and can retry failures.
+Set `summarize: true` on `legal_search`, `legal_cited_by`, or the `download` / `download_results` actions of `direct_download` to directly invoke the summarizer and save `<case>.Summary.md`. Calls are sequential per opinion, with progress forwarded to Pi. Summary/conversion failures preserve the HTML and are reported separately; resume reuses successful matching summaries and can retry failures.
 
 ## Public tools
 
-Only multi-operation tools use `action`: `legal_cited_by` distinguishes `collect`, `resume`, and `refresh`, while `direct_download` distinguishes `find` and `download`, and `legal_search_history` distinguishes `list`, `read`, and `review`. `legal_library_search` searches local files. `legal_jurisdictions`, `legal_search`, and `legal_open_browser` each perform one operation and therefore take no `action` field.
+Only multi-operation tools use `action`: `legal_cited_by` distinguishes `collect`, `resume`, and `refresh`, while `direct_download` distinguishes `find`, `download`, and `download_results`, and `legal_search_history` distinguishes `list`, `read`, and `review`. `legal_library_search` searches local files. `legal_jurisdictions`, `legal_search`, and `legal_open_browser` each perform one operation and therefore take no `action` field.
 
 The browser and jurisdiction tools emit a top-level lifecycle update when it starts and when it completes, fails, or is cancelled. Updates include `tool`, `toolCallId`, `phase`, `status`, and `message`; longer searches retain their detailed provider, page, browser, and download progress between those lifecycle events. Progress reporting is best-effort and cannot fail the underlying tool call.
 
@@ -32,7 +32,7 @@ The no-argument result includes a flat `jurisdictions` list, its `count`, nested
 
 ### `legal_search`
 
-Search exactly one selected provider and return every parsed record from the requested result pages. Page 1 is opened through the rendered search form; later pages are reached only by clicking the provider's rendered **Next** link. The workflow does not jump to a constructed page or result-offset URL.
+Search exactly one selected provider and preserve every parsed record from the requested result pages. The model-facing output previews up to 20 compact rows with pagination through saved history. Page 1 is opened through the rendered search form; later pages are reached only by clicking the provider's rendered **Next** link. The workflow does not jump to a constructed page or result-offset URL.
 
 ```json
 {"search_term":"state-created danger doctrine","provider":"scholar","jurisdiction":"3rd circuit","pages_to_search":2,"max_cases_to_download":5,"year_from":2000}
@@ -40,9 +40,9 @@ Search exactly one selected provider and return every parsed record from the req
 
 `provider` is `scholar`, `courtlistener`, or `justia` and remains an explicit tool field. The bundled skill chooses `scholar` when the user does not name a provider. Unified CourtListener discovery explicitly selects Published, Unpublished, and Errata opinions instead of accepting CourtListener's Published-only default. Justia is supplemental site-search discovery: it accepts `jurisdiction: "all"`, has no reliable year filter, returns only `law.justia.com/cases/` results, and follows at most 10 rendered result pages. `pages_to_search` defaults to 1, accepts finite values from 1 through 50 subject to the provider cap, and uses -1 to search every result page exposed by the provider interface. Google Scholar exposes at most 50 pages/1,000 results for one query; reaching that cap is reported as `providerPageCapReached` and does not prove provider exhaustion. `max_cases_to_download` independently defaults to 5, uses -1 for every unique case discovered by the call, not every case that may exist, and uses 0 for parsed results only. `runtime_limit_minutes` is optional with no default; omit it for no tool-imposed runtime deadline or supply 1 through 240 for a bounded call. `year_from` and `year_to` are optional provider-enforced filing-year bounds for Scholar and CourtListener.
 
-Each returned result keeps normalized case fields and `result_snippet` at the root and identifies the selected provider with `provider`. `result_snippet` contains the provider's search excerpt, or `null` when unavailable. Provider-native fields, the opinion URL, rendered result page and position, and `retrieved_at` are preserved in the singular `provider_data` object. The tool searches one provider per call.
+Compact rows expose `result_ref`, `title`, `court`, `year`, `publication_status`, `case_key`, `provider`, and `result_snippet`. Missing metadata is `null`; snippets are provider discovery excerpts. Run scope, counts, warnings, and continuation appear once. Use `legal_search_history` with `action: "read"`, `run_id`, and `offset`/`limit` for subsequent rows. Add an exact `result_ref` to inspect the original native record, URL, page/position, retrieval time, source paths, and current integrity. References bind to a run and immutable journal observation, so duplicate rows remain distinct and earlier selections survive recapture. `case_key` also filters a history read.
 
-Every provider record is returned with page, position, case metadata, provider identity, opinion URL, `case_key`, and download status. The returned records are not collapsed by the conservative deduplication used to select downloads. While each result page is live, every newly selected case is downloaded by clicking its rendered title, saving the opinion HTML under `./Cases`, and using browser **Back** to restore that same result page before another title or Next is clicked.
+Full tool details retain all provider records with `provider_data`, opinion URL, page/position, `case_key`, download status, and derivative paths. Listings remain separate from the conservative deduplication used to select downloads. While each result page is live, every newly selected case is downloaded by clicking its rendered title, saving the opinion HTML under `./Cases`, and using browser **Back** to restore that same result page before another title or Next is clicked.
 
 If a search stops after fully completing pages 1 through 3 of a five-page request, it returns `resumePage: 4` and `pagesRemaining: 2`. Continue by resending the same search fields with the returned `runId` as `run_id`:
 
@@ -76,6 +76,14 @@ Cited-by presence does not show positive treatment and is not a substitute for a
 
 ### `direct_download`
 
+Download one or several saved search results from any of the three providers:
+
+```json
+{"action":"download_results","run_id":"<returned-run-id>","result_refs":["<returned-result-ref>","<another-returned-result-ref>"],"summarize":false}
+```
+
+Select exact returned references, never later row numbers. The tool restores each saved results page, verifies the selected provider-native opinion identity, and clicks the rendered link. Unavailable selections fail individually; no replacement is guessed. Each acquisition is checkpointed before conversion/summary. Per-result outcomes include paths and errors; returned `retry` arguments contain unfinished work. Verified saved sources are reused, and references remain reusable. Omit `browser` to retain the run's browser.
+
 Find a named case and inspect the returned state-bound candidates:
 
 ```json
@@ -100,7 +108,7 @@ Open or focus a visible provider browser for manual inspection or verification:
 {"provider":"courtlistener"}
 ```
 
-Only `provider` is accepted. The tool always navigates to the configured HTTPS homepage for Scholar, CourtListener, or Justia.
+Accepts `provider` and optional `browser: "chrome" | "edge"`. The tool always navigates to the configured HTTPS homepage for Scholar, CourtListener, or Justia.
 
 ## Storage
 
@@ -122,15 +130,20 @@ Title/court/year and docket/court/year alone never merge records. Every parsed s
 
 ## Operational boundary
 
-Provider browsing uses fixed HTTPS homepages and is visible and delayed. Scholar, CourtListener, and Justia share one persistent Chrome user-data directory at `<active Pi profile>/legal-research-chrome-profile`, so all three providers reuse the same browser process while retaining provider-specific tabs. The directory is resolved with Pi's `getAgentDir()`: it defaults to `~/.pi/agent/legal-research-chrome-profile` and follows `PI_CODING_AGENT_DIR` when a separate profile is selected. For example, `PI_CODING_AGENT_DIR=~/.pi/pilegal` uses `~/.pi/pilegal/legal-research-chrome-profile`. Set the profile before starting Pi and restart Pi after changing it. Existing browser data is not automatically copied or migrated between profiles. `legal_search` resumes its saved record using `run_id`; cited-by work remains checkpointed and defaults to seeking the end of results exposed by its selected public provider interfaces. When `runtime_limit_minutes` is supplied, the limit is checked between operations, so an in-flight browser operation may finish after the requested boundary. When it is omitted, the extension applies no runtime deadline. Provider verification, throttling, cancellation, or an external host limit can still stop a call, and even a reported provider end does not prove every relevant opinion was indexed or retrievable. `legal_search` supports all three providers; `legal_cited_by` and `direct_download` continue to use Scholar and CourtListener.
+Provider browsing uses fixed HTTPS homepages and is visible and delayed. Browser tools accept `browser: "chrome" | "edge"`; the LLM chooses and defaults to Chrome. Resumes and saved selections inherit the recorded browser when omitted. An explicit browser change on an ordinary or cited-by run persists the new choice. Named-case find/download handles stay bound to their original browser.
+
+Providers share a persistent profile within each browser: `<active Pi profile>/legal-research-chrome-profile` or `legal-research-edge-profile`. Chrome and Edge use separate debugging endpoints, launch attempts, tabs, navigation sessions, and pacing state. Profiles follow Pi's `getAgentDir()` and `PI_CODING_AGENT_DIR`; set the profile before starting Pi and restart Pi after changing it. Existing data is not automatically migrated between browsers or profiles. If an older executable override points Chrome at Edge, move that override to `LEGAL_RESEARCH_EDGE_PATH` and select Edge explicitly.
+
+`legal_search` resumes with `run_id`; cited-by work remains checkpointed. Optional `runtime_limit_minutes` is checked between operations, so an in-flight operation can finish after the boundary. Omitting it applies no tool deadline. Provider verification, throttling, cancellation, or an external host limit can stop work. Even a reported provider end does not prove complete coverage. `legal_search` and `direct_download action=download_results` support all three providers; cited-by and named-case find use Scholar and CourtListener.
 
 Browser-mutating public tools declare sequential execution. Direct-download selections are additionally claimed in their persisted state before any awaited browser work, so overlapping download calls fail closed. Provider navigation-session caches are bounded and purge entries for closed tabs. The public surface never accepts raw opinion URLs.
 
-Browser-side interruptions (an unsolved CAPTCHA or verification page, an anti-bot block, a Chrome command timeout or disconnect) are reported as transient failures distinct from page-layout or request errors; `legal_cited_by` pauses on the former and marks a provider blocked on the latter. CourtListener commands that time out or disconnect are retried once by reconnecting to the same tab and checking whether the navigation already completed.
+Browser-side interruptions (an unsolved CAPTCHA or verification page, an anti-bot block, a browser command timeout or disconnect) are reported as transient failures distinct from page-layout or request errors; `legal_cited_by` pauses on the former and marks a provider blocked on the latter. CourtListener commands that time out or disconnect are retried once by reconnecting to the same tab and checking whether the navigation already completed.
 
 ## Configuration
 
-- `LEGAL_RESEARCH_CHROME_PATH`: path to the Chrome or Edge executable when it is not in a standard location. The older `SCHOLAR_CHROME_PATH` and `COURTLISTENER_CHROME_PATH` names remain accepted.
+- `LEGAL_RESEARCH_CHROME_PATH`: path to Google Chrome when it is not in a standard location. The older `SCHOLAR_CHROME_PATH` and `COURTLISTENER_CHROME_PATH` names remain accepted for Chrome.
+- `LEGAL_RESEARCH_EDGE_PATH`: path to Microsoft Edge when it is not in a standard location. Explicit Edge selection never falls back to Chrome.
 - `LEGAL_RESEARCH_ALERT_SOUND`: set to `off` (or `0`, `false`, `no`) to silence the alert played when a CAPTCHA or verification page needs the user's attention. The older `SCHOLAR_CAPTCHA_SOUND` and `COURTLISTENER_VERIFICATION_SOUND` names remain accepted.
 
 ## Timing

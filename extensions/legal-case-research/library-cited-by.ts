@@ -1,4 +1,5 @@
 import { processDownloadedOpinion } from "./opinion-processing.ts";
+import { validateBrowser, withBrowser, type BrowserChoice } from "./browser-choice.ts";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { AgentToolUpdateCallback, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -32,6 +33,7 @@ import {
 } from "./workflows.ts";
 
 export interface LegalCitedByCollectOptions {
+  browser?: BrowserChoice;
   summarize?: boolean;
   action: "collect" | "refresh";
   run_id?: string;
@@ -45,6 +47,7 @@ export interface LegalCitedByCollectOptions {
 }
 
 export interface LegalCitedByResumeOptions {
+  browser?: BrowserChoice;
   summarize?: boolean;
   action: "resume";
   run_id?: string;
@@ -59,6 +62,7 @@ export interface LegalCitedByResumeOptions {
 export type LegalCitedByOptions = LegalCitedByCollectOptions | LegalCitedByResumeOptions;
 
 export interface LegalCitedByOutcome {
+  browser?: BrowserChoice;
   runId: string;
   lastRetrievedAt?: string;
   refreshedFrom?: string;
@@ -267,14 +271,15 @@ export async function runLegalCitedBy(
     options.action !== "resume"
       ? [
         "action", "case_key", "run_id", "pages_to_search", "max_cases_to_download", "runtime_limit_minutes", "summarize",
-        "jurisdiction", "year_from", "year_to",
+        "jurisdiction", "year_from", "year_to", "browser",
       ].includes(key)
       : [
-        "action", "case_key", "run_id", "pages_to_search", "max_cases_to_download", "runtime_limit_minutes", "summarize",
+        "action", "case_key", "run_id", "pages_to_search", "max_cases_to_download", "runtime_limit_minutes", "summarize", "browser",
       ].includes(key)
   ));
   if (unexpected.length) throw new Error(`action=${options.action} does not accept: ${unexpected.join(", ")}.`);
   if (options.summarize !== undefined && typeof options.summarize !== "boolean") throw new Error("summarize must be a boolean.");
+  validateBrowser(options.browser);
   const limits = legalCitedByLimits(options);
   const requestedPages = limits.pagesToSearch;
   const requestedDownloadLimit = limits.maxCasesToDownload;
@@ -311,9 +316,11 @@ export async function runLegalCitedBy(
   const directory = options.action === "resume" ? previous!.directory : newCitedCollectionDirectory(ctx.cwd, seed);
   const manifestPath = join(directory, "cited-by-manifest.json");
   const previousCollection = previous && existsSync(join(previous.directory, "collection.json"))
-    ? readJsonFile<{ summarize?: boolean }>(join(previous.directory, "collection.json")) : undefined;
+    ? readJsonFile<{ summarize?: boolean; browser?: BrowserChoice }>(join(previous.directory, "collection.json")) : undefined;
+  const browser = validateBrowser(options.browser ?? previousCollection?.browser);
+  return withBrowser(browser, async () => {
   const summarize = options.summarize ?? previousCollection?.summarize ?? false;
-  if (options.action === "resume" && previousCollection) writeJsonAtomic(join(directory, "collection.json"), { ...readJsonFile<Record<string, unknown>>(join(directory, "collection.json")), summarize });
+  if (options.action === "resume" && previousCollection) writeJsonAtomic(join(directory, "collection.json"), { ...readJsonFile<Record<string, unknown>>(join(directory, "collection.json")), summarize, browser });
   const runId = directory.split(/[\\/]/).at(-1)!;
   let enumeration: CitedByOutcome;
   if (options.action === "resume") {
@@ -328,7 +335,7 @@ export async function runLegalCitedBy(
     if (filters.year_from !== undefined && filters.year_to !== undefined && filters.year_from > filters.year_to) throw new Error("Inherited and requested year filters conflict; year_from cannot exceed year_to.");
     const baselinePath = previous ? join(previous.directory, "cited-by-results.json") : undefined;
     const baselineCaseKeys = baselinePath && existsSync(baselinePath) ? readJsonFile<NormalizedCase[]>(baselinePath).map(item => item.canonicalKey) : [];
-    writeJsonAtomic(join(directory, "collection.json"), { schemaVersion: 1, runId, caseKey: seed.canonicalKey, summarize,
+    writeJsonAtomic(join(directory, "collection.json"), { schemaVersion: 1, runId, caseKey: seed.canonicalKey, summarize, browser,
       refreshedFrom: previous?.manifestPath, baselineCaseKeys, filters, createdAt: new Date().toISOString() });
     writeFileSync(join(directory, "review.md"), "# Cited-by research review\n\n## Purpose\n\n## Useful authorities and source versions\n\n## Rejected authorities and reasons\n\n## Unresolved treatment questions\n\n## Next steps\n", { flag: "wx" });
     enumeration = await runtime.enumerate({ seed, providers: seedProviders, save_path: directory,
@@ -424,7 +431,7 @@ export async function runLegalCitedBy(
   writeJsonAtomic(join(directory, "comparison.json"), { baseline: collection.refreshedFrom, newCaseKeys,
     note: "Newly observed results; differences can reflect coverage and filters, not newly decided cases or legal treatment." });
   return {
-    runId, lastRetrievedAt: enumeration.lastRetrievedAt, refreshedFrom: collection.refreshedFrom, newCaseKeys, warnings: [...new Set(warnings)],
+    browser, runId, lastRetrievedAt: enumeration.lastRetrievedAt, refreshedFrom: collection.refreshedFrom, newCaseKeys, warnings: [...new Set(warnings)],
     status,
     caseKey: seed.canonicalKey,
     seed,
@@ -448,6 +455,7 @@ export async function runLegalCitedBy(
     unavailableProviders: (["scholar", "courtlistener"] as DiscoveryProviderId[])
       .filter((provider) => !enumeration.requestedProviders.includes(provider)),
   };
+  });
 }
 
 export function legalCitedByOutcomeText(outcome: LegalCitedByOutcome): string {

@@ -7,6 +7,31 @@ export interface SummaryRequest {
   focus?: string;
 }
 
+export interface OpinionPartContext {
+  source_scope: "partial_opinion";
+  part_number: number;
+  total_parts: number;
+  first_block: string;
+  last_block: string;
+  has_previous_part: boolean;
+  has_next_part: boolean;
+  overlap_block_ids: string[];
+}
+export interface PartialOpinionSummary extends OpinionPartContext {
+  summary: StructuredCaseSummary;
+}
+
+/** Host-generated boundaries and overlap; never ask the model to reconstruct them. */
+export function opinionPartContext(parts: LoadedCaseSource[], index: number): OpinionPartContext {
+  const part = parts[index];
+  if (!part?.blocks.length) throw new Error("Opinion part must contain source blocks.");
+  const neighbors = new Set([...(parts[index - 1]?.blocks ?? []), ...(parts[index + 1]?.blocks ?? [])].map(block => block.id));
+  return { source_scope: "partial_opinion", part_number: index + 1, total_parts: parts.length,
+    first_block: part.blocks[0]!.id, last_block: part.blocks.at(-1)!.id,
+    has_previous_part: index > 0, has_next_part: index + 1 < parts.length,
+    overlap_block_ids: part.blocks.filter(block => neighbors.has(block.id)).map(block => block.id) };
+}
+
 export interface ModelPrompt {
   systemPrompt: string;
   userPrompt: string;
@@ -112,6 +137,7 @@ export function buildMultipartCandidatePrompt(
   request: SummaryRequest,
   partNumber: number,
   partCount: number,
+  partContext: OpinionPartContext,
 ): ModelPrompt {
   return {
     responseSchema: { name: "case_summary", schema: CaseSummaryResponseSchema },
@@ -119,6 +145,7 @@ export function buildMultipartCandidatePrompt(
     userPrompt: [
       sharedPrefix(source, request),
       `Multipart segment: ${partNumber}/${partCount}`,
+      `PART_CONTEXT_JSON=${JSON.stringify(partContext)}`,
       "This is only one ordered part of a longer judicial opinion.",
       "Summarize only what this part expressly establishes. Do not infer the case's final holding or disposition unless this part states it.",
       "Preserve qualifications, speaker attribution, opinion part, and the supplied original source-block IDs.",
@@ -134,7 +161,7 @@ export function buildMultipartCandidatePrompt(
 export function buildMultipartAuditPrompt(
   evidenceSource: LoadedCaseSource,
   request: SummaryRequest,
-  partials: StructuredCaseSummary[],
+  partials: PartialOpinionSummary[],
 ): ModelPrompt {
   return {
     responseSchema: { name: "case_summary_audit", schema: SummaryAuditResponseSchema },
@@ -145,6 +172,7 @@ export function buildMultipartAuditPrompt(
       "The supplied source contains the original blocks cited by those summaries plus adjacent context, not the complete opinion.",
       "Remove overlap duplicates, preserve material qualifications, reconcile only what the supplied evidence supports, and flag conflicts or unsupported claims.",
       "Do not infer that an omitted topic was absent from the complete opinion.",
+      "Each partial has host-provided part numbers, original block boundaries, neighbor flags, and overlap IDs. These describe coverage, not evidence of a holding. Repetition across parts is not independent corroboration. Partial summaries are fallible notes; resolve claims against supplied source blocks.",
       "disagreements and required_corrections are arrays of strings. findings is an array of objects using only supplied source block IDs.",
       "Return JSON following this concrete format example:",
       summaryAuditJsonShape(),
@@ -157,7 +185,7 @@ export function buildMultipartAuditPrompt(
 export function buildMultipartFinalPrompt(
   evidenceSource: LoadedCaseSource,
   request: SummaryRequest,
-  partials: StructuredCaseSummary[],
+  partials: PartialOpinionSummary[],
   audit: SummaryAudit,
 ): ModelPrompt {
   return {
@@ -169,6 +197,7 @@ export function buildMultipartFinalPrompt(
       "The supplied source contains the original blocks cited by the partial summaries plus adjacent context.",
       "Remove duplicate statements caused by overlap. Preserve qualifications and distinguish majority, concurrence, dissent, parties, lower courts, and quoted authorities.",
       "Use only claims supported by the supplied original source blocks. Do not fill apparent gaps from memory.",
+      "Read each partial's host-provided part_number, total_parts, block boundaries, neighbor flags, and overlap IDs before combining it. The source here is cited evidence plus adjacent context, not the complete opinion. An omission from a partial is not proof of absence from the whole opinion; leave unresolved conflicts explicit.",
       SUMMARY_FORMAT_INSTRUCTIONS,
       caseSummaryJsonShape(),
       "",
